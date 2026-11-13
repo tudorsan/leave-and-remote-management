@@ -102,6 +102,8 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+    // Schema se creează și se actualizează prin migrările EF Core la pornire.
+    await db.Database.MigrateAsync();
     var clock = scope.ServiceProvider.GetRequiredService<AppClock>();
     await DbSeeder.SeedAsync(db, app.Environment.IsDevelopment(), clock.CurrentYear);
 }
@@ -140,3 +142,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Expus pentru testele de integrare (WebApplicationFactory<Program>).
+public partial class Program;

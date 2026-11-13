@@ -11,7 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace LeaveRemote.Api.Services;
 
 /// <summary>Autentificare cu email și parolă (hash bcrypt) și emiterea tokenului JWT.</summary>
-public sealed class AuthService(AppDbContext db, IConfiguration configuration, AppClock clock)
+public sealed class AuthService(AppDbContext db, IConfiguration configuration)
 {
     public async Task<Result<LoginResponse>> LoginAsync(LoginRequest request)
     {
@@ -57,7 +57,9 @@ public sealed class AuthService(AppDbContext db, IConfiguration configuration, A
             issuer: configuration["Jwt:Issuer"],
             audience: configuration["Jwt:Audience"],
             claims: claims,
-            expires: clock.UtcNow.AddMinutes(configuration.GetValue("Jwt:ExpirationMinutes", 60)),
+            // Expirarea folosește ora reală, aceeași cu care middleware-ul JWT validează tokenul
+            // (ceasul aplicației servește doar regulilor de business pe date calendaristice).
+            expires: DateTime.UtcNow.AddMinutes(configuration.GetValue("Jwt:ExpirationMinutes", 60)),
             signingCredentials: new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256));
 
