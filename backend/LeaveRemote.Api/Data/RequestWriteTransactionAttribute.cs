@@ -15,16 +15,7 @@ public sealed class RequestWriteTransactionAttribute : Attribute, IAsyncActionFi
         var cancellationToken = context.HttpContext.RequestAborted;
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        // Scrierile de cereri sunt serializate: regulile de suprapunere, sold și limite citesc și scriu aceleași date.
-        var lockResult = await db.Database.SqlQueryRaw<int>("""
-            DECLARE @result int;
-            EXEC @result = sys.sp_getapplock
-                @Resource = N'LeaveRemote.RequestWrites', @LockMode = 'Exclusive',
-                @LockOwner = 'Transaction', @LockTimeout = 5000;
-            SELECT @result AS [Value];
-            """).ToListAsync(cancellationToken);
-
-        if (lockResult.Single() < 0)
+        if (!await RequestWriteLock.AcquireAsync(db, cancellationToken))
         {
             context.Result = new ConflictObjectResult(new
             {

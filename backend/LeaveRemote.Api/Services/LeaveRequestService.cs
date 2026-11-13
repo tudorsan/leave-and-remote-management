@@ -28,7 +28,7 @@ public sealed class LeaveRequestService(
         var today = clock.Today;
         return requests.Select(r => new OwnLeaveRequestView(
             r.Id, r.UserId, r.StartDate, r.EndDate, r.Type.ToString(), r.Status.ToString(), r.WorkingDates.Count,
-            r.Comment, r.RejectionReason, r.CreatedAt, CanCancel(r, today))).ToList();
+            r.Comment, r.RejectionReason, r.CancellationReason, r.CreatedAt, CanCancel(r, today))).ToList();
     }
 
     /// <summary>

@@ -127,6 +127,32 @@ public sealed class NotificationService(AppDbContext db, NotificationOutbox outb
         }
     }
 
+    // ---------- Expirare automată ----------
+
+    public void LeaveExpired(LeaveRequest request, User requester) =>
+        outbox.Enqueue(new EmailMessage(requester.Email,
+            $"Cererea ta de {LeaveLabel(request.Type)} a fost anulată automat",
+            $"""
+            Salut, {requester.FirstName}!
+
+            Cererea ta de {LeaveLabel(request.Type)} pentru {Period(request)} nu a fost aprobată sau respinsă până la finalul perioadei, așa că a fost anulată automat.
+            {ExpiryFollowUp(request.Type == LeaveType.Vacation)}
+            """));
+
+    public void RemoteExpired(IEnumerable<DateOnly> days, User requester) =>
+        outbox.Enqueue(new EmailMessage(requester.Email,
+            "Cererea ta de lucru remote a fost anulată automat",
+            $"""
+            Salut, {requester.FirstName}!
+
+            Cererea ta de lucru remote din {Days(days)} nu a fost aprobată sau respinsă până la finalul perioadei, așa că a fost anulată automat.
+            {ExpiryFollowUp(releasesBalance: false)}
+            """));
+
+    private static string ExpiryFollowUp(bool releasesBalance) =>
+        (releasesBalance ? "Zilele rezervate din soldul de concediu au fost eliberate. " : string.Empty) +
+        "Dacă perioada trebuie totuși înregistrată, discută cu managerul tău.";
+
     // ---------- Cine aprobă cererile cuiva ----------
 
     /// <summary>

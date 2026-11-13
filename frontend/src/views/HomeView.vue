@@ -51,6 +51,7 @@ interface OwnRequest {
   id: number
   status: keyof typeof statuses
   rejectionReason: string | null
+  cancellationReason?: string | null
   createdAt: string
   comment: string | null
 }
@@ -811,6 +812,9 @@ onMounted(() => {
                   </p>
                   <p v-if="request.status === 'Rejected' && request.rejectionReason" class="rejection-reason">
                     <strong>Motivul respingerii:</strong> {{ request.rejectionReason }}
+                  </p>
+                  <p v-if="request.status === 'Canceled' && request.cancellationReason" class="rejection-reason">
+                    {{ request.cancellationReason }}
                   </p>
                 </div>
                 <div class="own-request-actions">

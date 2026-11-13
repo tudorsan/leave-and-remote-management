@@ -28,6 +28,9 @@ public class LeaveRequest
 
     public string? RejectionReason { get; set; }
 
+    /// <summary>Motivul unei anulări făcute de aplicație (ex. cerere nedecisă până la finalul perioadei).</summary>
+    public string? CancellationReason { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 

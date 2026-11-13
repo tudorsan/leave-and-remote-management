@@ -31,7 +31,7 @@ public sealed class RemoteRequestService(
         var today = clock.Today;
         return requests.Select(r => new OwnRemoteRequestView(
             r.Id, r.UserId, r.Status.ToString(), r.Days.Select(d => d.Date).Order().ToList(),
-            r.Comment, r.RejectionReason, r.CreatedAt,
+            r.Comment, r.RejectionReason, r.CancellationReason, r.CreatedAt,
             CanEdit: r.Status == RequestStatus.Pending,
             CanCancel: CanCancel(r, today))).ToList();
     }

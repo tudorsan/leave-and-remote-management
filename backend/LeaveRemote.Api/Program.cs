@@ -44,6 +44,10 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<ExportService>();
 
+// Cererile rămase „În așteptare” după finalul perioadei se anulează automat (la pornire și apoi periodic).
+builder.Services.AddScoped<PendingRequestExpiryService>();
+builder.Services.AddHostedService<PendingRequestExpiryWorker>();
+
 // Notificări (cerința 16): emailurile sunt simulate în log. Pentru emailuri reale se înlocuiește doar această linie.
 builder.Services.AddSingleton<IEmailSender, LogEmailSender>();
 builder.Services.AddScoped<NotificationOutbox>();

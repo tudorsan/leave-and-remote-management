@@ -4,7 +4,7 @@ namespace LeaveRemote.Api.DTOs;
 
 public sealed record OwnLeaveRequestView(
     int Id, int UserId, DateOnly StartDate, DateOnly EndDate, string Type, string Status, int WorkingDays,
-    string? Comment, string? RejectionReason, DateTime CreatedAt, bool CanCancel);
+    string? Comment, string? RejectionReason, string? CancellationReason, DateTime CreatedAt, bool CanCancel);
 
 public sealed record SavedLeaveRequestView(
     int Id, int UserId, DateOnly StartDate, DateOnly EndDate, string Type, string Status, int WorkingDays, string? Comment);
@@ -15,7 +15,7 @@ public sealed record PendingLeaveView(
 
 public sealed record OwnRemoteRequestView(
     int Id, int UserId, string Status, List<DateOnly> Days, string? Comment, string? RejectionReason,
-    DateTime CreatedAt, bool CanEdit, bool CanCancel);
+    string? CancellationReason, DateTime CreatedAt, bool CanEdit, bool CanCancel);
 
 public sealed record SavedRemoteRequestView(List<int> Ids, int UserId, string Status, List<DateOnly> Days, string? Comment);
 
