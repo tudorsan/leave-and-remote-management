@@ -1,7 +1,6 @@
 
 using LeaveRemote.Api.Models;
 using Microsoft.EntityFrameworkCore;
-using System.Globalization;
 
 namespace LeaveRemote.Api.Data;
 
@@ -40,52 +39,7 @@ public static class DbSeeder
             await db.SaveChangesAsync();
         }
 
-        for (var year = currentYear; year <= Math.Min(currentYear + 1, 9999); year++)
-        {
-            var seedKey = $"internal.holidays_seeded.{year}";
-            if (await db.AppSettings.AnyAsync(s => s.Key == seedKey)) continue;
-
-            db.AppSettings.Add(new AppSetting { Key = seedKey, Value = "true" });
-            // Existing installations may have customized or cleared the current year's calendar.
-            if ((!initializeSettings && year == currentYear) ||
-                await db.PublicHolidays.AnyAsync(h => h.Date.Year == year))
-            {
-                await db.SaveChangesAsync();
-                continue;
-            }
-
-            var holidays = new (int Month, int Day, string Name)[]
-            {
-                (1, 1, "Anul Nou"),
-                (1, 2, "A doua zi de Anul Nou"),
-                (1, 6, "Boboteaza"),
-                (1, 7, "Sfântul Ioan Botezătorul"),
-                (1, 24, "Ziua Unirii Principatelor Române"),
-                (5, 1, "Ziua Muncii"),
-                (6, 1, "Ziua Copilului"),
-                (8, 15, "Adormirea Maicii Domnului"),
-                (11, 30, "Sfântul Andrei"),
-                (12, 1, "Ziua Națională a României"),
-                (12, 25, "Crăciunul"),
-                (12, 26, "A doua zi de Crăciun")
-            };
-
-            var easter = OrthodoxEaster(year);
-            var movable = new[]
-            {
-                (easter.AddDays(-2), "Vinerea Mare"),
-                (easter, "Paștele Ortodox"),
-                (easter.AddDays(1), "A doua zi de Paște"),
-                (easter.AddDays(49), "Rusaliile"),
-                (easter.AddDays(50), "A doua zi de Rusalii")
-            };
-            db.PublicHolidays.AddRange(holidays.Select(h => (new DateOnly(year, h.Month, h.Day), h.Name))
-                .Concat(movable)
-                .GroupBy(h => h.Item1)
-                .Select(h => new PublicHoliday { Date = h.Key, Name = string.Join(" / ", h.Select(x => x.Item2)) }));
-
-            await db.SaveChangesAsync();
-        }
+        // Sărbătorile legale sunt generate de PublicHolidayService (la pornire și periodic).
 
         // Utilizatorii initiali
         if (seedDemoUsers && !await db.Users.AnyAsync())
@@ -173,12 +127,4 @@ public static class DbSeeder
         await transaction.CommitAsync();
     }
 
-    private static DateOnly OrthodoxEaster(int year)
-    {
-        // The Julian Easter calculation yields a Julian calendar date.
-        var paschalMoon = (19 * (year % 19) + 15) % 30;
-        var sunday = (2 * (year % 4) + 4 * (year % 7) - paschalMoon + 34) % 7;
-        var date = paschalMoon + sunday + 114;
-        return DateOnly.FromDateTime(new JulianCalendar().ToDateTime(year, date / 31, date % 31 + 1, 0, 0, 0, 0));
-    }
 }

@@ -44,9 +44,11 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<ExportService>();
 
-// Cererile rămase „În așteptare” după finalul perioadei se anulează automat (la pornire și apoi periodic).
+// Întreținere automată (la pornire și apoi periodic): sărbătorile legale pentru anii următori
+// și anularea cererilor rămase „În așteptare” după finalul perioadei.
+builder.Services.AddScoped<PublicHolidayService>();
 builder.Services.AddScoped<PendingRequestExpiryService>();
-builder.Services.AddHostedService<PendingRequestExpiryWorker>();
+builder.Services.AddHostedService<MaintenanceWorker>();
 
 // Notificări (cerința 16): emailurile sunt simulate în log. Pentru emailuri reale se înlocuiește doar această linie.
 builder.Services.AddSingleton<IEmailSender, LogEmailSender>();
@@ -126,6 +128,8 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
     var clock = scope.ServiceProvider.GetRequiredService<AppClock>();
     await DbSeeder.SeedAsync(db, app.Environment.IsDevelopment(), clock.CurrentYear);
+    // Sărbătorile trebuie să existe înainte de primele cereri; ulterior le actualizează MaintenanceWorker.
+    await scope.ServiceProvider.GetRequiredService<PublicHolidayService>().EnsureCoveredAsync();
 }
 
 

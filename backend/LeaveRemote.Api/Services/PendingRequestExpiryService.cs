@@ -64,37 +64,3 @@ public sealed class PendingRequestExpiryService(
         return expired;
     }
 }
-
-/// <summary>
-/// Rulează expirarea la pornirea aplicației și apoi periodic (implicit la fiecare oră,
-/// configurabil prin „PendingRequests:ExpiryCheckMinutes”).
-/// </summary>
-public sealed class PendingRequestExpiryWorker(
-    IServiceScopeFactory scopes,
-    IConfiguration configuration,
-    ILogger<PendingRequestExpiryWorker> logger) : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        var interval = TimeSpan.FromMinutes(Math.Max(1, configuration.GetValue("PendingRequests:ExpiryCheckMinutes", 60)));
-        using var timer = new PeriodicTimer(interval);
-        do
-        {
-            try
-            {
-                await using var scope = scopes.CreateAsyncScope();
-                await scope.ServiceProvider.GetRequiredService<PendingRequestExpiryService>().ExpireAsync(stoppingToken);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                return;
-            }
-            catch (Exception exception)
-            {
-                // O eroare (ex. baza de date indisponibilă) nu oprește aplicația; se reîncearcă la următoarea rulare.
-                logger.LogError(exception, "Expirarea automată a cererilor nedecise a eșuat.");
-            }
-        }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
-    }
-}
