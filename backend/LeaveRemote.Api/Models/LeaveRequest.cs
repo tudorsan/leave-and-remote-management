@@ -10,6 +10,16 @@ public class LeaveRequest
 
     public DateOnly EndDate { get; set; }
 
+    public List<DateOnly> WorkingDates { get; set; } = new();
+
+    public int TeamAbsenceLimitPercent { get; set; }
+
+    public int MinDaysAhead { get; set; }
+
+    public int MaxDaysAhead { get; set; }
+
+    public List<DateOnly> HolidayDates { get; set; } = new();
+
     public LeaveType Type { get; set; }
 
     public RequestStatus Status { get; set; } = RequestStatus.Pending;

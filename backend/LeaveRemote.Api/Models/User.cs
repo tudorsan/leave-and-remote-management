@@ -14,6 +14,8 @@ public class User
 
     public UserRole Role { get; set; } = UserRole.Employee;
 
+    public int DefaultAnnualLeaveDays { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public int? TeamId { get; set; }
