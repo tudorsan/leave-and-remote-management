@@ -1,8 +1,14 @@
 
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import { VApp } from 'vuetify/components/VApp'
+import { VMain } from 'vuetify/components/VMain'
 </script>
 
 <template>
-  <RouterView />
+  <VApp>
+    <VMain>
+      <RouterView />
+    </VMain>
+  </VApp>
 </template>

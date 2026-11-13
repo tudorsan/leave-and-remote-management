@@ -1,0 +1,77 @@
+.ritm-role {
+  --ritm-page: #f8f7f2;
+  --ritm-surface: #fffefa;
+  --ritm-text: #182e27;
+  --ritm-accent: #204b39;
+  --ritm-accent-secondary: #315a45;
+  --ritm-brand: #36674c;
+  --ritm-muted: #40574b;
+  --ritm-label: #314d3d;
+  --ritm-divider: #dddfd4;
+  --ritm-border: #dce3d8;
+  --ritm-border-strong: #cbd9c8;
+  --ritm-calendar-border: #b9cbbb;
+  --ritm-panel: #f3f5ed;
+  --ritm-panel-soft: #f7f8f2;
+  --ritm-control: #edf2e7;
+  --ritm-badge: #e8eddd;
+  --ritm-highlight: #e4edde;
+  --ritm-selected: #dce8d5;
+  --ritm-outside: #e9ede4;
+  --ritm-outline: #507757;
+  --ritm-focus: #687c43;
+  --ritm-balance-border: #bacfb9;
+  --ritm-list-divider: #e3e9df;
+}
+
+.ritm-role--Manager {
+  --ritm-page: #f2f6fb;
+  --ritm-surface: #fcfdff;
+  --ritm-text: #192c43;
+  --ritm-accent: #214c80;
+  --ritm-accent-secondary: #315d8f;
+  --ritm-brand: #315e93;
+  --ritm-muted: #40556f;
+  --ritm-label: #354f6d;
+  --ritm-divider: #d8e2ee;
+  --ritm-border: #d5e0ee;
+  --ritm-border-strong: #b9cde3;
+  --ritm-calendar-border: #a8bfd9;
+  --ritm-panel: #eaf1f9;
+  --ritm-panel-soft: #f2f6fb;
+  --ritm-control: #e6effa;
+  --ritm-badge: #e0ebf9;
+  --ritm-highlight: #dae9fa;
+  --ritm-selected: #d4e4f8;
+  --ritm-outside: #e3eaf3;
+  --ritm-outline: #4e75a4;
+  --ritm-focus: #4e75a4;
+  --ritm-balance-border: #aec7e4;
+  --ritm-list-divider: #dce5f0;
+}
+
+.ritm-role--Admin {
+  --ritm-page: #fbf3f3;
+  --ritm-surface: #fffdfd;
+  --ritm-text: #3b2228;
+  --ritm-accent: #842c3d;
+  --ritm-accent-secondary: #963d4d;
+  --ritm-brand: #963d4d;
+  --ritm-muted: #684750;
+  --ritm-label: #683843;
+  --ritm-divider: #ead8dd;
+  --ritm-border: #ead8dc;
+  --ritm-border-strong: #dec0c8;
+  --ritm-calendar-border: #d8b0bb;
+  --ritm-panel: #f9eaee;
+  --ritm-panel-soft: #fcf2f4;
+  --ritm-control: #f8e7ec;
+  --ritm-badge: #f4dfe5;
+  --ritm-highlight: #f4dce3;
+  --ritm-selected: #f0d3dc;
+  --ritm-outside: #f3e4e8;
+  --ritm-outline: #a4596b;
+  --ritm-focus: #a4596b;
+  --ritm-balance-border: #dfb5c2;
+  --ritm-list-divider: #eedfe3;
+}
