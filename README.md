@@ -63,14 +63,51 @@ Comunicarea dintre frontend și backend se va realiza prin API-uri REST.
 
 ## Instalare și rulare
 
-Instrucțiunile complete pentru instalare, configurarea bazei de date, aplicarea migrațiilor și pornirea aplicației vor fi documentate pe parcursul dezvoltării.
+Backendul necesită SDK-ul .NET 10 și SQL Server. Configurația locală implicită folosește `(localdb)\MSSQLLocalDB` și baza `LeaveRemoteDb`. Pentru alt server, setează variabila `ConnectionStrings__DefaultConnection`.
+
+Din rădăcina repository-ului, în PowerShell:
+
+```powershell
+dotnet tool install --global dotnet-ef --version 10.0.0
+$env:ASPNETCORE_ENVIRONMENT = 'Development'
+$jwtKey = [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+dotnet user-secrets set 'Jwt:Key' $jwtKey --project backend/LeaveRemote.Api
+dotnet ef database update --project backend/LeaveRemote.Api
+dotnet run --project backend/LeaveRemote.Api
+```
+
+Dacă `dotnet-ef` este instalat deja, sari peste prima comandă. Folosește o cheie JWT nouă doar la configurarea inițială sau când vrei să invalidezi tokenurile existente.
+
+În mediul `Development`, o bază nouă primește utilizatori demonstrativi, echipe, setări și sărbătorile anului curent. Conturile de test sunt `admin@example.com` / `Admin123!`, `manager@example.com` / `Manager123!` și `employee@example.com` / `Employee123!`.
+
+Backendul ascultă implicit pe `http://localhost:5128`. Tokenul obținut de la `POST /api/auth/login` se trimite în antetul `Authorization: Bearer <token>`. Contractul API este disponibil în development la `/openapi/v1.json`.
+
+Pentru o demonstrație cu datele inițiale ale proiectului, folosește baza separată `LeaveRemoteDemoDb`. Prima comandă creează schema prin migrații, iar prima pornire populează datele demonstrative.
+
+```powershell
+$env:ASPNETCORE_ENVIRONMENT = 'Development'
+dotnet ef database update --project backend/LeaveRemote.Api --configuration Release --connection 'Server=(localdb)\MSSQLLocalDB;Database=LeaveRemoteDemoDb;Trusted_Connection=True;TrustServerCertificate=True;'
+dotnet run --project backend/LeaveRemote.Api --configuration Release --launch-profile demo
+```
+
+Profilul `demo` ascultă pe `http://localhost:5130`. Al doilea angajat demonstrativ este `employee2@example.com` / `Employee123!`.
+
+Pentru interfața Vue, lasă backendul pornit cu profilul `demo`. Ai nevoie de Node.js 22.18 sau mai nou din seria 22, ori Node.js 24.12 sau mai nou. Din rădăcina proiectului, deschide un al doilea terminal PowerShell și rulează:
+
+```powershell
+Set-Location frontend
+npm.cmd ci
+npm.cmd run dev
+```
+
+Deschide adresa afișată de Vite, implicit `http://localhost:5173`. Vite trimite cererile către API pe portul `5130`. Alege rolul contului de test înainte de autentificare.
 
 ## Testare
 
-Proiectul va include verificări pentru funcționalitățile principale, permisiunile utilizatorilor și regulile de business, inclusiv situațiile-limită relevante.
+Verifică compilarea backendului cu `dotnet build backend/backend.slnx`. Poți folosi contractul OpenAPI pentru a verifica fluxurile cu cele trei conturi demonstrative.
+
+Din folderul `frontend`, rulează `npm.cmd run build` pentru verificarea tipurilor și compilare, apoi `npm.cmd run test:unit -- --run` pentru testele frontend.
 
 ## Stadiul proiectului
 
-**În dezvoltare — etapă de inițializare.**
-
-Funcționalitățile prezentate în acest document descriu obiectivele proiectului și nu indică faptul că toate au fost deja implementate.
+Aplicația include autentificare pe roluri, calendar lunar, cereri de concediu și lucru remote, aprobări, solduri și administrarea utilizatorilor, echipelor și setărilor globale.
