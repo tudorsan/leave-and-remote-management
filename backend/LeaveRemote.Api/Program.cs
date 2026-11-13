@@ -1,5 +1,6 @@
 using LeaveRemote.Api.Controllers;
 using LeaveRemote.Api.Data;
+using LeaveRemote.Api.Services;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -27,8 +28,19 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
         message = "Datele trimise lipsesc sau au un format invalid."
     });
 });
+// Regulile de business stau în servicii; controllerele doar traduc rezultatele în HTTP.
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<AppClock>();
+builder.Services.AddScoped<CurrentUserService>();
+builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<LeaveBalanceService>();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddScoped<LeaveRequestService>();
+builder.Services.AddScoped<RemoteRequestService>();
+builder.Services.AddScoped<CalendarService>();
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<TeamService>();
+builder.Services.AddScoped<AuthService>();
+
 builder.Services.AddOpenApi();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
@@ -90,7 +102,8 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    await DbSeeder.SeedAsync(db, app.Environment.IsDevelopment());
+    var clock = scope.ServiceProvider.GetRequiredService<AppClock>();
+    await DbSeeder.SeedAsync(db, app.Environment.IsDevelopment(), clock.CurrentYear);
 }
 
 

@@ -7,7 +7,7 @@ namespace LeaveRemote.Api.Data;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(AppDbContext db, bool seedDemoUsers)
+    public static async Task SeedAsync(AppDbContext db, bool seedDemoUsers, int currentYear)
     {
         await using var transaction = await db.Database.BeginTransactionAsync();
         // Echipele initiale
@@ -40,7 +40,6 @@ public static class DbSeeder
             await db.SaveChangesAsync();
         }
 
-        var currentYear = DateTime.Today.Year;
         for (var year = currentYear; year <= Math.Min(currentYear + 1, 9999); year++)
         {
             var seedKey = $"internal.holidays_seeded.{year}";
