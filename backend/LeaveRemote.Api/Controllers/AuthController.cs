@@ -39,7 +39,8 @@ public class AuthController : ControllerBase
         var user = await _db.Users
             .FirstOrDefaultAsync(u => u.Email == email);
 
-        if (user == null ||
+        if (!ApiInput.FitsBCrypt(request.Password) ||
+            user == null ||
             !user.IsActive ||
             !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
