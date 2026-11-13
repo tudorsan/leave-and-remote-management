@@ -43,7 +43,8 @@ export const useAuthStore = defineStore('auth', () => {
     return true
   }
 
-  async function startSession(token: string, expectedRole: CurrentUser['role']) {
+  // Fără rol așteptat, sesiunea pornește cu rolul real al contului, confirmat de server.
+  async function startSession(token: string, expectedRole?: CurrentUser['role']) {
     const result = await loadUser(token, expectedRole)
     if (result !== true) return result
 

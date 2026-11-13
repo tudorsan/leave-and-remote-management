@@ -144,13 +144,17 @@ app.UseStatusCodePages(async statusContext =>
     await response.WriteAsJsonAsync(new { code, message });
 });
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-
-app.UseHttpsRedirection();
+else
+{
+    // În producție traficul se forțează pe HTTPS. Local, aplicația rulează doar pe HTTP (vezi launchSettings),
+    // deci redirecționarea nu are destinație și ar produce doar un avertisment la fiecare pornire.
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();

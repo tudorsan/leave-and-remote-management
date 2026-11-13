@@ -1,0 +1,14 @@
+# Fișierele text se păstrează în repository cu final de rând LF, indiferent de sistemul de operare,
+# ca proiectul să arate la fel pe Windows, macOS și Linux.
+* text=auto eol=lf
+
+# Scripturile Windows au nevoie de CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Fișiere binare.
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary

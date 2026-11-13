@@ -16,9 +16,20 @@ interface PendingRequest {
   comment: string | null
 }
 
-type Leave = PendingRequest & { type: string; startDate: string; endDate: string }
+type Leave = PendingRequest & { type: string; startDate: string; endDate: string; workingDays?: number }
 type Remote = PendingRequest & { days: string[] }
-type ReviewRow = PendingRequest & { endpoint: string; label: string; period: string }
+type ReviewRow = PendingRequest & { endpoint: string; label: string; period: string; startsInPast: boolean }
+
+// Datele (AAAA-LL-ZZ) se compară ca text și se afișează ZZ.LL.AAAA, fără conversii de fus orar.
+function formatDay(day: string) {
+  const [year, month, date] = day.split('-')
+  return `${date}.${month}.${year}`
+}
+
+function localToday() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
 
 const requests = ref<ReviewRow[]>([])
 const loading = ref(false)
@@ -45,18 +56,24 @@ async function loadRequests() {
 
     const leaves: Leave[] = await leave.json()
     const remotes: Remote[] = await remote.json()
+    const today = localToday()
     requests.value = [
       ...leaves.map(request => ({
         ...request,
         endpoint: `/api/leave-requests/${request.id}`,
         label: props.leaveLabels[request.type]?.label ?? request.type,
-        period: `${request.startDate} – ${request.endDate}`,
+        period: (request.startDate === request.endDate
+          ? formatDay(request.startDate)
+          : `${formatDay(request.startDate)} – ${formatDay(request.endDate)}`) +
+          (request.workingDays ? ` · ${request.workingDays === 1 ? '1 zi lucrătoare' : `${request.workingDays} zile lucrătoare`}` : ''),
+        startsInPast: request.startDate < today,
       })),
       ...remotes.map(request => ({
         ...request,
         endpoint: `/api/remote-requests/${request.id}`,
         label: 'Lucru remote',
-        period: request.days.join(', '),
+        period: request.days.map(formatDay).join(', '),
+        startsInPast: request.days.some(day => day < today),
       })),
     ]
   } catch {
@@ -122,6 +139,9 @@ onMounted(loadRequests)
           <div class="review-title">
             <h3>{{ request.firstName }} {{ request.lastName }}</h3>
             <span class="review-type">{{ request.label }}</span>
+            <span v-if="request.startsInPast" class="review-past" title="Cererea poate fi totuși aprobată, de exemplu un concediu medical anunțat după ce a început.">
+              Data de început a trecut
+            </span>
           </div>
           <p class="review-period">{{ request.period }}</p>
           <p v-if="request.comment" class="review-comment">{{ request.comment }}</p>
@@ -176,6 +196,7 @@ onMounted(loadRequests)
 
 .review-details { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }
 .review-type { padding: 2px 9px; border-radius: 999px; background: var(--ritm-badge); color: var(--ritm-accent); font-size: 13px; font-weight: 700; }
+.review-past { padding: 2px 9px; border-radius: 999px; background: #fbf2dd; color: #644716; font-size: 13px; font-weight: 700; }
 .review-period, .review-comment { margin-top: 4px; color: var(--ritm-muted); }
 .review-comment { white-space: pre-wrap; }
 .rejection-form { flex: 1 0 100%; padding-top: 14px; border-top: 1px solid var(--ritm-border); }

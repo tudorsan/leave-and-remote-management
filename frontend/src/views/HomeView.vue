@@ -330,7 +330,7 @@ async function submitLeaveRequest() {
       }),
     })
     if (response.status === 401) {
-      await signOut()
+      await sessionExpired()
       return
     }
     if (!response.ok) {
@@ -403,7 +403,7 @@ async function loadOwnRequests() {
       fetch('/api/remote-requests', { headers }),
     ])
     if (leave.status === 401 || remote.status === 401) {
-      await signOut()
+      await sessionExpired()
       return
     }
     if (!leave.ok || !remote.ok) throw new Error('Own requests unavailable')
@@ -458,7 +458,7 @@ async function submitRemoteRequest() {
       }),
     })
     if (response.status === 401) {
-      await signOut()
+      await sessionExpired()
       return
     }
     if (!response.ok) {
@@ -514,7 +514,7 @@ async function cancelOwnRequest(request: OwnLeaveRequest | OwnRemoteRequest) {
       headers: { Authorization: `Bearer ${auth.getToken() ?? ''}` },
     })
     if (response.status === 401) {
-      await signOut()
+      await sessionExpired()
       return
     }
     if (!response.ok) {
@@ -549,7 +549,7 @@ async function loadWeek(loadId: number) {
     })
     if (loadId !== calendarLoadId) return
     if (response.status === 401) {
-      await signOut()
+      await sessionExpired()
       return
     }
     const result = await response.json().catch(() => null)
@@ -593,7 +593,7 @@ async function loadCalendar(direction: -1 | 0 | 1 = 0) {
     })
     if (loadId !== calendarLoadId) return
     if (response.status === 401) {
-      await signOut()
+      await sessionExpired()
       return
     }
     if (!response.ok) {
@@ -629,7 +629,7 @@ async function loadTeams() {
       headers: { Authorization: `Bearer ${auth.getToken() ?? ''}` },
     })
     if (response.status === 401) {
-      await signOut()
+      await sessionExpired()
       return
     }
     if (!response.ok) throw new Error('Teams unavailable')
@@ -656,6 +656,12 @@ function changeMonth(direction: -1 | 1) {
 async function signOut() {
   auth.signOut()
   await router.replace({ name: 'login' })
+}
+
+// Serverul a respins sesiunea (expirată, parolă schimbată sau cont dezactivat): explicăm de ce apare din nou login-ul.
+async function sessionExpired() {
+  auth.signOut()
+  await router.replace({ name: 'login', query: { session: 'expired' } })
 }
 
 onMounted(() => {
@@ -711,24 +717,24 @@ onMounted(() => {
             </VBtn>
           </div>
 
-          <OwnLeaveBalance v-if="ownBalanceOpen" :revision="balanceRevision" @unauthorized="signOut" />
+          <OwnLeaveBalance v-if="ownBalanceOpen" :revision="balanceRevision" @unauthorized="sessionExpired" />
           <PendingRequests
             v-if="canReview && pendingRequestsOpen"
             :leave-labels="types"
-            @unauthorized="signOut"
+            @unauthorized="sessionExpired"
             @reviewed="balanceRevision++; loadCalendar()"
           />
-          <AnnualLeaveAllocation v-if="canReview && allocationOpen" @unauthorized="signOut" />
+          <AnnualLeaveAllocation v-if="canReview && allocationOpen" @unauthorized="sessionExpired" />
 
-          <GlobalSettings v-if="isAdmin && settingsOpen" class="request-panel" @unauthorized="signOut" />
-          <UserAdministration v-if="isAdmin && usersOpen" class="request-panel" :teams="teams" :teams-unavailable="teamsLoading || !!teamsError" @unauthorized="signOut" />
+          <GlobalSettings v-if="isAdmin && settingsOpen" class="request-panel" @unauthorized="sessionExpired" />
+          <UserAdministration v-if="isAdmin && usersOpen" class="request-panel" :teams="teams" :teams-unavailable="teamsLoading || !!teamsError" @unauthorized="sessionExpired" />
           <TeamAdministration
             v-if="isAdmin && teamAdministrationOpen"
             class="request-panel"
             :teams="teams"
             :loading="teamsLoading"
             :load-error="teamsError"
-            @unauthorized="signOut"
+            @unauthorized="sessionExpired"
             @saved="updateTeamList"
             @reload="loadTeams"
           />
@@ -776,7 +782,7 @@ onMounted(() => {
                 @click="loadOwnRequests"
               >Reîncarcă cererile</VBtn>
             </div>
-            <ApprovedDaysExport @unauthorized="signOut" />
+            <ApprovedDaysExport @unauthorized="sessionExpired" />
             <VAlert v-if="ownRequestsError" class="mb-3" color="error" variant="tonal" role="alert">
               {{ ownRequestsError }}
             </VAlert>

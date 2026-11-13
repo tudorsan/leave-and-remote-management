@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { VAlert } from 'vuetify/components/VAlert'
 import { VBtn } from 'vuetify/components/VBtn'
 import { VCard } from 'vuetify/components/VCard'
@@ -9,6 +9,9 @@ import { useAuthStore } from '../stores/auth'
 import '../assets/role-palette.css'
 
 const router = useRouter()
+const route = useRoute()
+// Afișat când aplicația te-a trimis aici pentru că sesiunea nu mai este valabilă.
+const sessionExpired = route.query.session === 'expired'
 const auth = useAuthStore()
 const email = ref('')
 const password = ref('')
@@ -40,7 +43,6 @@ interface LoginResponse {
 
 async function login() {
   if (submitting.value || !selectedRole.value) return
-  const role = selectedRole.value.id
 
   submitting.value = true
   errorMessage.value = ''
@@ -58,12 +60,10 @@ async function login() {
       return
     }
 
-    const session = await auth.startSession(result.token, role)
-    if (session === 'role-mismatch') {
-      errorMessage.value = 'Contul are alt rol. Apasă „Schimbă rolul” și alege rolul contului tău.'
-      return
-    }
-    if (!session) {
+    // Cardul ales e doar un punct de plecare: rolul real vine din cont (verificat de server),
+    // deci un card greșit nu blochează autentificarea.
+    const session = await auth.startSession(result.token)
+    if (session !== true) {
       errorMessage.value = 'Sesiunea nu a putut fi verificată. Încearcă din nou.'
       return
     }
@@ -86,6 +86,9 @@ async function login() {
     </header>
 
     <div class="login-layout">
+      <VAlert v-if="sessionExpired" class="session-notice" color="info" variant="tonal" role="status">
+        Sesiunea ta a expirat sau nu mai este valabilă. Autentifică-te din nou ca să continui.
+      </VAlert>
       <section v-if="!selectedRole" class="role-choice" aria-labelledby="role-choice-heading">
         <h1 id="role-choice-heading" class="role-question" tabindex="-1" :aria-label="roleQuestion">
           <span
@@ -213,6 +216,7 @@ async function login() {
 }
 
 .forgot-password { margin-top: 20px; text-align: center; }
+.session-notice { max-width: 38rem; margin: 0 auto 24px; }
 
 .login-action { margin-top: 4px; background: var(--ritm-accent); color: #fff; font-weight: 700; text-transform: none; letter-spacing: 0; }
 .login-action:focus-visible, .back-link:focus-visible, .change-role:focus-visible, .role-option:focus-visible { outline: 3px solid var(--ritm-focus); outline-offset: 4px; }

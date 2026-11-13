@@ -10,6 +10,12 @@ export default defineConfig({
     vue(),
     vueDevTools(),
   ],
+  // Atât serverul de dezvoltare, cât și „vite preview” (build-ul de producție) trimit /api către backend.
+  preview: {
+    proxy: {
+      '/api': 'http://localhost:5130',
+    },
+  },
   server: {
     proxy: {
       '/api': 'http://localhost:5130',
