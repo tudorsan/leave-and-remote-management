@@ -1,6 +1,7 @@
 using LeaveRemote.Api.Controllers;
 using LeaveRemote.Api.Data;
 using LeaveRemote.Api.Services;
+using LeaveRemote.Api.Services.Notifications;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -40,6 +41,11 @@ builder.Services.AddScoped<CalendarService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<AuthService>();
+
+// Notificări (cerința 16): emailurile sunt simulate în log. Pentru emailuri reale se înlocuiește doar această linie.
+builder.Services.AddSingleton<IEmailSender, LogEmailSender>();
+builder.Services.AddScoped<NotificationOutbox>();
+builder.Services.AddScoped<NotificationService>();
 
 builder.Services.AddOpenApi();
 

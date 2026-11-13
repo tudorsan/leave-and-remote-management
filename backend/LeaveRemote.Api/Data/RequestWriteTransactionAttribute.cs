@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using LeaveRemote.Api.Services.Notifications;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeaveRemote.Api.Data;
@@ -14,7 +15,7 @@ public sealed class RequestWriteTransactionAttribute : Attribute, IAsyncActionFi
         var cancellationToken = context.HttpContext.RequestAborted;
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        // Both request types share the same overlap and capacity rules.
+        // Scrierile de cereri sunt serializate: regulile de suprapunere, sold și limite citesc și scriu aceleași date.
         var lockResult = await db.Database.SqlQueryRaw<int>("""
             DECLARE @result int;
             EXEC @result = sys.sp_getapplock
@@ -33,11 +34,20 @@ public sealed class RequestWriteTransactionAttribute : Attribute, IAsyncActionFi
             return;
         }
 
+        var outbox = context.HttpContext.RequestServices.GetRequiredService<NotificationOutbox>();
         var result = await next();
         if (result.Exception == null &&
             ((result.Result as IStatusCodeActionResult)?.StatusCode ?? 200) < 400)
         {
             await transaction.CommitAsync(cancellationToken);
+            // Emailurile pleacă doar după ce modificările sunt salvate definitiv.
+            // (fără tokenul request-ului: dacă clientul închide conexiunea după salvare, emailurile pleacă oricum).
+            await outbox.FlushAsync(CancellationToken.None);
+        }
+        else
+        {
+            // Operația a eșuat: tranzacția se anulează, iar emailurile pregătite se aruncă.
+            outbox.Discard();
         }
     }
 }

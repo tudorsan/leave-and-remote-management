@@ -2,6 +2,7 @@ using LeaveRemote.Api.Controllers;
 using LeaveRemote.Api.Data;
 using LeaveRemote.Api.DTOs;
 using LeaveRemote.Api.Models;
+using LeaveRemote.Api.Services.Notifications;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeaveRemote.Api.Services;
@@ -10,7 +11,11 @@ namespace LeaveRemote.Api.Services;
 /// Zilele de lucru remote. Fiecare zi este o cerere separată (start = end), care refolosește
 /// același flux de stări ca și concediile și poate fi aprobată, respinsă sau anulată independent.
 /// </summary>
-public sealed class RemoteRequestService(AppDbContext db, SettingsService settings, AppClock clock)
+public sealed class RemoteRequestService(
+    AppDbContext db,
+    SettingsService settings,
+    NotificationService notifications,
+    AppClock clock)
 {
     private static ServiceError NotFound(bool ownedOnly) => ServiceError.NotFound("REMOTE_REQUEST_NOT_FOUND",
         ownedOnly ? "Cererea remote nu există sau nu îți aparține." : "Cererea remote nu există.");
@@ -158,6 +163,9 @@ public sealed class RemoteRequestService(AppDbContext db, SettingsService settin
         db.RemoteRequests.AddRange(created);
         await db.SaveChangesAsync();
 
+        // Un singur email pentru tot formularul: confirmare (aprobare automată) sau anunț către aprobatori.
+        await notifications.RemoteSubmittedAsync(days, user, autoApproved: rules.Status == RequestStatus.Approved);
+
         return new SavedRemoteRequestView(created.Select(r => r.Id).ToList(), user.Id, rules.Status.ToString(), days, comment);
     }
 
@@ -198,12 +206,13 @@ public sealed class RemoteRequestService(AppDbContext db, SettingsService settin
 
         request.Status = RequestStatus.Approved;
         await db.SaveChangesAsync();
+        notifications.RemoteApproved(request.Days.Select(d => d.Date), requester!, reviewer);
         return new RequestOutcomeView(id, nameof(RequestStatus.Approved), null, "Cererea remote a fost aprobată.");
     }
 
     public async Task<Result<RequestOutcomeView>> RejectAsync(User reviewer, int id, string? reason)
     {
-        var request = await db.RemoteRequests.FirstOrDefaultAsync(r => r.Id == id);
+        var request = await db.RemoteRequests.Include(r => r.Days).FirstOrDefaultAsync(r => r.Id == id);
         if (request is null) return NotFound(ownedOnly: false);
 
         var requester = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId);
@@ -220,6 +229,7 @@ public sealed class RemoteRequestService(AppDbContext db, SettingsService settin
         request.Status = RequestStatus.Rejected;
         request.RejectionReason = trimmed;
         await db.SaveChangesAsync();
+        notifications.RemoteRejected(request.Days.Select(d => d.Date), requester!, reviewer, trimmed!);
         return new RequestOutcomeView(id, nameof(RequestStatus.Rejected), trimmed, "Cererea remote a fost respinsă.");
     }
 
@@ -238,8 +248,10 @@ public sealed class RemoteRequestService(AppDbContext db, SettingsService settin
             return ServiceError.Conflict("REMOTE_ALREADY_STARTED", "O zi remote aprobată poate fi anulată doar înainte de data ei.");
         }
 
+        var wasApproved = request.Status == RequestStatus.Approved;
         request.Status = RequestStatus.Canceled;
         await db.SaveChangesAsync();
+        await notifications.RemoteCancelledAsync(request.Days.Select(d => d.Date), user, wasApproved);
         return new RequestOutcomeView(id, nameof(RequestStatus.Canceled), null, "Cererea remote a fost anulată.");
     }
 

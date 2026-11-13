@@ -2,6 +2,7 @@ using LeaveRemote.Api.Controllers;
 using LeaveRemote.Api.Data;
 using LeaveRemote.Api.DTOs;
 using LeaveRemote.Api.Models;
+using LeaveRemote.Api.Services.Notifications;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeaveRemote.Api.Services;
@@ -11,6 +12,7 @@ public sealed class LeaveRequestService(
     AppDbContext db,
     LeaveBalanceService balances,
     SettingsService settings,
+    NotificationService notifications,
     AppClock clock)
 {
     private static ServiceError NotFound(bool ownedOnly) => ServiceError.NotFound("LEAVE_REQUEST_NOT_FOUND",
@@ -128,6 +130,9 @@ public sealed class LeaveRequestService(
         if (existing is null) db.LeaveRequests.Add(request);
         await db.SaveChangesAsync();
 
+        // O cerere nouă îi anunță pe cei care o pot aproba (editarea nu schimbă starea, deci nu notifică).
+        if (existing is null) await notifications.LeaveSubmittedAsync(request, user);
+
         return new SavedLeaveRequestView(request.Id, request.UserId, request.StartDate, request.EndDate,
             request.Type.ToString(), request.Status.ToString(), workingDates.Count, request.Comment);
     }
@@ -172,9 +177,10 @@ public sealed class LeaveRequestService(
         var updated = await db.LeaveRequests
             .Where(r => r.Id == id && r.Status == RequestStatus.Pending)
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, RequestStatus.Approved));
-        return updated == 0
-            ? NotPending("aprobate")
-            : new RequestOutcomeView(id, nameof(RequestStatus.Approved), null, "Cererea de concediu a fost aprobată.");
+        if (updated == 0) return NotPending("aprobate");
+
+        notifications.LeaveApproved(request, requester!, reviewer);
+        return new RequestOutcomeView(id, nameof(RequestStatus.Approved), null, "Cererea de concediu a fost aprobată.");
     }
 
     public async Task<Result<RequestOutcomeView>> RejectAsync(User reviewer, int id, string? reason)
@@ -199,30 +205,34 @@ public sealed class LeaveRequestService(
             .ExecuteUpdateAsync(s => s
                 .SetProperty(r => r.Status, RequestStatus.Rejected)
                 .SetProperty(r => r.RejectionReason, trimmed));
-        return updated == 0
-            ? NotPending("respinse")
-            : new RequestOutcomeView(id, nameof(RequestStatus.Rejected), trimmed, "Cererea de concediu a fost respinsă.");
+        if (updated == 0) return NotPending("respinse");
+
+        notifications.LeaveRejected(request, requester!, reviewer, trimmed!);
+        return new RequestOutcomeView(id, nameof(RequestStatus.Rejected), trimmed, "Cererea de concediu a fost respinsă.");
     }
 
     /// <summary>Cerința 10: o cerere în așteptare se anulează oricând; una aprobată, doar înainte de data de început.</summary>
     public async Task<Result<RequestOutcomeView>> CancelAsync(User user, int id)
     {
         var owned = db.LeaveRequests.Where(r => r.Id == id && r.UserId == user.Id);
-        var today = clock.Today;
-        var updated = await owned
-            .Where(r => r.Status == RequestStatus.Pending || (r.Status == RequestStatus.Approved && r.StartDate > today))
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, RequestStatus.Canceled));
-        if (updated > 0)
-        {
-            return new RequestOutcomeView(id, nameof(RequestStatus.Canceled), null, "Cererea de concediu a fost anulată.");
-        }
-
         var request = await owned.AsNoTracking().FirstOrDefaultAsync();
         if (request is null) return NotFound(ownedOnly: true);
 
-        return request.Status == RequestStatus.Approved
-            ? ServiceError.Conflict("LEAVE_ALREADY_STARTED", "O cerere aprobată poate fi anulată doar înainte de data de început.")
-            : ServiceError.Conflict("INVALID_REQUEST_STATUS", "Cererea nu mai poate fi anulată.");
+        if (!CanCancel(request, clock.Today))
+        {
+            return request.Status == RequestStatus.Approved
+                ? ServiceError.Conflict("LEAVE_ALREADY_STARTED", "O cerere aprobată poate fi anulată doar înainte de data de început.")
+                : ServiceError.Conflict("INVALID_REQUEST_STATUS", "Cererea nu mai poate fi anulată.");
+        }
+
+        var previousStatus = request.Status;
+        var updated = await owned
+            .Where(r => r.Status == previousStatus)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, RequestStatus.Canceled));
+        if (updated == 0) return ServiceError.Conflict("INVALID_REQUEST_STATUS", "Cererea nu mai poate fi anulată.");
+
+        await notifications.LeaveCancelledAsync(request, user, wasApproved: previousStatus == RequestStatus.Approved);
+        return new RequestOutcomeView(id, nameof(RequestStatus.Canceled), null, "Cererea de concediu a fost anulată.");
     }
 
     public static bool CanCancel(LeaveRequest request, DateOnly today) =>
