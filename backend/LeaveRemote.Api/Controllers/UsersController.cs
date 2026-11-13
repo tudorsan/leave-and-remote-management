@@ -44,7 +44,7 @@ public class UsersController : ControllerBase
         if (currentUser.Role != UserRole.Manager &&
             currentUser.Role != UserRole.Admin)
         {
-            return Forbid();
+            return ApiErrors.Forbidden();
         }
 
         var query = _db.Users.AsNoTracking();

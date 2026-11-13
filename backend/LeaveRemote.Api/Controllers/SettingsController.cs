@@ -15,7 +15,7 @@ public class SettingsController(AppDbContext db) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetSettings()
     {
-        if (!await IsCurrentAdminAsync()) return Forbid();
+        if (!await IsCurrentAdminAsync()) return ApiErrors.Forbidden();
 
         return Ok(new
         {
@@ -31,7 +31,7 @@ public class SettingsController(AppDbContext db) : ControllerBase
     [RequestWriteTransaction]
     public async Task<IActionResult> UpdateSettings([FromBody] GlobalSettingsRequest request)
     {
-        if (!await IsCurrentAdminAsync()) return Forbid();
+        if (!await IsCurrentAdminAsync()) return ApiErrors.Forbidden();
 
         if (request.RemoteMinDaysAhead is null or < 0 ||
             request.RemoteMaxDaysAhead is null || request.RemoteMaxDaysAhead < request.RemoteMinDaysAhead ||
@@ -76,7 +76,7 @@ public class SettingsController(AppDbContext db) : ControllerBase
     [RequestWriteTransaction]
     public async Task<IActionResult> UpdateHolidays([FromBody] List<HolidaySetting?> holidays)
     {
-        if (!await IsCurrentAdminAsync()) return Forbid();
+        if (!await IsCurrentAdminAsync()) return ApiErrors.Forbidden();
 
         if (holidays.Any(h => h == null || h.Date == default || string.IsNullOrWhiteSpace(h.Name)) ||
             holidays.Select(h => h!.Date).Distinct().Count() != holidays.Count)

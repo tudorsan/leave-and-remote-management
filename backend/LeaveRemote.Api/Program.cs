@@ -1,4 +1,6 @@
+using LeaveRemote.Api.Controllers;
 using LeaveRemote.Api.Data;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -17,6 +19,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
+    // Erorile client fără corp (ex. 415) sunt formatate uniform de UseStatusCodePages, nu ca ProblemDetails.
+    options.SuppressMapClientErrors = true;
     options.InvalidModelStateResponseFactory = _ => new BadRequestObjectResult(new
     {
         code = "INVALID_INPUT",
@@ -89,6 +93,25 @@ using (var scope = app.Services.CreateScope())
     await DbSeeder.SeedAsync(db, app.Environment.IsDevelopment());
 }
 
+
+// Orice excepție neprevăzută devine un 500 cu formatul unic { code, message }, fără detalii interne.
+app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+{
+    var error = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+    app.Logger.LogError(error, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path);
+    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+    var (code, message) = ApiErrors.ForStatus(StatusCodes.Status500InternalServerError);
+    await context.Response.WriteAsJsonAsync(new { code, message });
+}));
+
+// Răspunsurile de eroare produse de framework fără corp (401/403 din [Authorize], 404 de rută etc.)
+// primesc același format ca erorile întoarse de controllere.
+app.UseStatusCodePages(async statusContext =>
+{
+    var response = statusContext.HttpContext.Response;
+    var (code, message) = ApiErrors.ForStatus(response.StatusCode);
+    await response.WriteAsJsonAsync(new { code, message });
+});
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

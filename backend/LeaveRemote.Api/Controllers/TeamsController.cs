@@ -40,7 +40,7 @@ public class TeamsController : ControllerBase
     [RequestWriteTransaction]
     public async Task<IActionResult> CreateTeam([FromBody] CreateTeamRequest request)
     {
-        if (!await IsCurrentAdminAsync()) return Forbid();
+        if (!await IsCurrentAdminAsync()) return ApiErrors.Forbidden();
 
         var name = request.Name?.Trim();
 
@@ -87,7 +87,7 @@ public class TeamsController : ControllerBase
             int id,
             [FromBody] CreateTeamRequest request)
         {
-            if (!await IsCurrentAdminAsync()) return Forbid();
+            if (!await IsCurrentAdminAsync()) return ApiErrors.Forbidden();
 
             var name = request.Name?.Trim();
 
@@ -138,7 +138,7 @@ public class TeamsController : ControllerBase
     [RequestWriteTransaction]
     public async Task<IActionResult> DeactivateTeam(int id)
     {
-        if (!await IsCurrentAdminAsync()) return Forbid();
+        if (!await IsCurrentAdminAsync()) return ApiErrors.Forbidden();
 
         var team = await _db.Teams.FindAsync(id);
 

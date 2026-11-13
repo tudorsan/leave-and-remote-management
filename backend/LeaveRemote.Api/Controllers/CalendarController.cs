@@ -18,10 +18,10 @@ public class CalendarController(AppDbContext db) : ControllerBase
     {
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
         {
-            return Unauthorized();
+            return ApiErrors.Unauthenticated();
         }
         var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId && u.IsActive);
-        if (user == null) return Unauthorized();
+        if (user == null) return ApiErrors.Unauthenticated();
 
         var today = DateTime.Today;
         var selectedYear = year ?? today.Year;
@@ -46,7 +46,7 @@ public class CalendarController(AppDbContext db) : ControllerBase
 
         if (user.Role != UserRole.Admin)
         {
-            if (!user.TeamId.HasValue || (teamId.HasValue && teamId != user.TeamId)) return Forbid();
+            if (!user.TeamId.HasValue || (teamId.HasValue && teamId != user.TeamId)) return ApiErrors.Forbidden();
             teamId = user.TeamId;
         }
         else if (teamId.HasValue && !await db.Teams.AnyAsync(t => t.Id == teamId.Value))
