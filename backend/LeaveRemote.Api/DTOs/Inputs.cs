@@ -60,3 +60,7 @@ public sealed record GlobalSettingsInput(
     int? LeaveMaxTeamAbsentPct);
 
 public sealed record HolidayInput(DateOnly Date, string? Name);
+
+public sealed record ForgotPasswordInput(string? Email);
+
+public sealed record ResetPasswordInput(string? Token, string? NewPassword);

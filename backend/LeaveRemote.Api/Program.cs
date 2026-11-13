@@ -41,6 +41,7 @@ builder.Services.AddScoped<CalendarService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<PasswordResetService>();
 
 // Notificări (cerința 16): emailurile sunt simulate în log. Pentru emailuri reale se înlocuiește doar această linie.
 builder.Services.AddSingleton<IEmailSender, LogEmailSender>();
@@ -67,22 +68,30 @@ builder.Services
                     return;
                 }
 
+                // La fiecare cerere: contul trebuie să fie activ, iar tokenul să fie emis după ultima
+                // schimbare de parolă (resetarea parolei închide toate sesiunile vechi).
                 var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
-                var role = await db.Users.AsNoTracking()
+                var account = await db.Users.AsNoTracking()
                     .Where(u => u.Id == userId && u.IsActive)
-                    .Select(u => (LeaveRemote.Api.Models.UserRole?)u.Role)
+                    .Select(u => new { u.Role, u.SecurityStamp })
                     .SingleOrDefaultAsync(context.HttpContext.RequestAborted);
-                if (!role.HasValue)
+                if (account is null)
                 {
                     context.Fail("Inactive user.");
                     return;
                 }
+                if (identity.FindFirst(AuthService.SecurityStampClaim)?.Value != account.SecurityStamp)
+                {
+                    context.Fail("Password changed since the token was issued.");
+                    return;
+                }
+                var role = account.Role;
 
                 foreach (var claim in identity.FindAll(identity.RoleClaimType).ToList())
                 {
                     identity.RemoveClaim(claim);
                 }
-                identity.AddClaim(new Claim(identity.RoleClaimType, role.Value.ToString()));
+                identity.AddClaim(new Claim(identity.RoleClaimType, role.ToString()));
             }
         };
         options.TokenValidationParameters = new TokenValidationParameters

@@ -27,6 +27,8 @@ public class AppDbContext : DbContext
 
     public DbSet<PublicHoliday> PublicHolidays => Set<PublicHoliday>();
 
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
 protected override void OnModelCreating(ModelBuilder modelBuilder)
 {
     base.OnModelCreating(modelBuilder);
@@ -88,6 +90,26 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
     
     modelBuilder.Entity<User>()
         .HasIndex(user => user.Email)
+        .IsUnique();
+
+    // Utilizatorii existenți primesc o valoare aleatoare la migrare.
+    modelBuilder.Entity<User>()
+        .Property(user => user.SecurityStamp)
+        .HasMaxLength(64)
+        .HasDefaultValueSql("REPLACE(CONVERT(nvarchar(36), NEWID()), '-', '')");
+
+    modelBuilder.Entity<PasswordResetToken>()
+        .HasOne<User>()
+        .WithMany()
+        .HasForeignKey(token => token.UserId)
+        .OnDelete(DeleteBehavior.Cascade);
+
+    modelBuilder.Entity<PasswordResetToken>()
+        .Property(token => token.TokenHash)
+        .HasMaxLength(64);
+
+    modelBuilder.Entity<PasswordResetToken>()
+        .HasIndex(token => token.TokenHash)
         .IsUnique();
 
 

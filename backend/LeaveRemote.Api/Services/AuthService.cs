@@ -13,6 +13,8 @@ namespace LeaveRemote.Api.Services;
 /// <summary>Autentificare cu email și parolă (hash bcrypt) și emiterea tokenului JWT.</summary>
 public sealed class AuthService(AppDbContext db, IConfiguration configuration)
 {
+    public const string SecurityStampClaim = "security_stamp";
+
     public async Task<Result<LoginResponse>> LoginAsync(LoginRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
@@ -50,7 +52,9 @@ public sealed class AuthService(AppDbContext db, IConfiguration configuration)
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Role, user.Role.ToString())
+            new(ClaimTypes.Role, user.Role.ToString()),
+            // Dacă parola se schimbă, valoarea din baza de date se schimbă și tokenul devine invalid.
+            new(SecurityStampClaim, user.SecurityStamp)
         };
 
         var token = new JwtSecurityToken(

@@ -21,6 +21,12 @@ public class User
     public int? TeamId { get; set; }
 
     public int? ManagerId { get; set; }
+
+    /// <summary>
+    /// Se schimbă la fiecare schimbare de parolă. Este inclus în token, iar tokenurile emise
+    /// cu o valoare veche sunt respinse, deci resetarea parolei închide toate sesiunile existente.
+    /// </summary>
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
 }
 
 public enum UserRole

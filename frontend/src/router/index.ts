@@ -24,11 +24,24 @@ const router = createRouter({
       name: 'login',
       component: LoginView,
     },
+    {
+      path: '/forgot-password',
+      name: 'forgot-password',
+      component: () => import('../views/ForgotPasswordView.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('../views/ResetPasswordView.vue'),
+      meta: { public: true },
+    },
   ],
 })
 
 router.beforeEach(async (to) => {
-  if (to.name === 'start') return
+  // Paginile publice (start, resetarea parolei) nu cer și nu verifică o sesiune.
+  if (to.name === 'start' || to.meta.public) return
   const authenticated = await useAuthStore().restoreSession()
 
   if (to.meta.requiresAuth && !authenticated) return { name: 'login' }

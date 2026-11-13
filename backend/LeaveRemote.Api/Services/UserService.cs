@@ -12,7 +12,6 @@ namespace LeaveRemote.Api.Services;
 /// </summary>
 public sealed class UserService(AppDbContext db, SettingsService settings, AppClock clock)
 {
-    private const int MinPasswordLength = 8;
     private static readonly ServiceError NotFound = ServiceError.NotFound("USER_NOT_FOUND", "Utilizatorul nu a fost găsit.");
 
     /// <summary>Adminul vede toți utilizatorii; Managerul, echipa sa și subordonații direcți.</summary>
@@ -49,7 +48,7 @@ public sealed class UserService(AppDbContext db, SettingsService settings, AppCl
             return ServiceError.BadRequest("INVALID_USER_DATA", "Numele, prenumele, emailul și parola sunt obligatorii.");
         }
         if (!IsValidEmail(email)) return InvalidEmail;
-        if (ValidatePassword(input.Password) is { } passwordError) return passwordError;
+        if (PasswordRules.Validate(input.Password) is { } passwordError) return passwordError;
         if (!ApiInput.TryParseEnumName<UserRole>(input.Role, out var role)) return InvalidRole;
         if (await EmailTakenAsync(email, null)) return EmailTaken;
         if (await ValidateHierarchyAsync(role, input.TeamId, input.ManagerId, null) is { } hierarchyError) return hierarchyError;
@@ -226,17 +225,6 @@ public sealed class UserService(AppDbContext db, SettingsService settings, AppCl
         return false;
     }
 
-    private static ServiceError? ValidatePassword(string password)
-    {
-        if (password.Length < MinPasswordLength)
-        {
-            return ServiceError.BadRequest("INVALID_PASSWORD", $"Parola trebuie să conțină minimum {MinPasswordLength} caractere.");
-        }
-        return ApiInput.FitsBCrypt(password)
-            ? null
-            : ServiceError.BadRequest("INVALID_PASSWORD",
-                $"Parola poate avea maximum {ApiInput.BCryptMaxPasswordBytes} de octeți în UTF-8 și nu poate conține caracterul nul.");
-    }
 
     private Task<bool> EmailTakenAsync(string email, int? excludeId) =>
         db.Users.AnyAsync(u => u.Email.ToLower() == email && (!excludeId.HasValue || u.Id != excludeId.Value));

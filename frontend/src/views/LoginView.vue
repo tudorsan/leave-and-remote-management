@@ -153,6 +153,10 @@ async function login() {
         <VAlert v-if="errorMessage" class="mt-4" color="error" variant="tonal" role="alert">
           {{ errorMessage }}
         </VAlert>
+
+        <p class="forgot-password">
+          <RouterLink class="back-link" :to="{ name: 'forgot-password' }">Ai uitat parola?</RouterLink>
+        </p>
       </VCard>
 
     </div>
@@ -207,6 +211,8 @@ async function login() {
   display: grid;
   gap: 1rem;
 }
+
+.forgot-password { margin-top: 20px; text-align: center; }
 
 .login-action { margin-top: 4px; background: var(--ritm-accent); color: #fff; font-weight: 700; text-transform: none; letter-spacing: 0; }
 .login-action:focus-visible, .back-link:focus-visible, .change-role:focus-visible, .role-option:focus-visible { outline: 3px solid var(--ritm-focus); outline-offset: 4px; }
