@@ -1,30 +1,14 @@
-# Ritm — calendar de concedii și lucru remote
+# Ritm — calendar de concedii și remote
 
-Aplicație web în care angajații își înregistrează concediile și zilele de lucru remote pe un calendar comun al echipei, iar managerii le aprobă. Regulile (limite, preaviz, sărbători, procentul maxim de absențe din echipă) sunt configurabile de Admin și sunt aplicate de backend.
+Proiectul meu pentru specificația „Calendar concedii & remote”. Angajații își trec concediile și zilele de remote într-un calendar comun al echipei, managerii le aprobă, iar adminul configurează regulile (preaviz, limite, sărbători, cât din echipă poate lipsi în aceeași zi).
 
-**Stack:** .NET 10 (ASP.NET Core Web API, EF Core) · Vue 3 + Vuetify (TypeScript) · SQL Server · xUnit și Vitest · Docker Compose.
+Backend în .NET 10 (Web API + EF Core), frontend în Vue 3 cu Vuetify, bază de date SQL Server. Am făcut toate cerințele obligatorii și pe cele trei opționale (resetarea parolei, vederea săptămânală cu export, notificările pe email).
 
-Proiectul implementează **toate cerințele din specificație, inclusiv cele opționale** (3, 6 și 16), și are **196 de teste automate** (171 backend, 25 frontend).
+## Cum îl pornești
 
----
+### Cu Docker (cel mai simplu, merge pe orice sistem)
 
-## Cuprins
-1. [Pornire rapidă](#1-pornire-rapidă)
-2. [Conturi de test](#2-conturi-de-test)
-3. [Ghid de evaluare pas cu pas](#3-ghid-de-evaluare-pas-cu-pas)
-4. [Acoperirea specificației](#4-acoperirea-specificației)
-5. [Decizii și presupuneri](#5-decizii-și-presupuneri)
-6. [Teste automate](#6-teste-automate)
-7. [Arhitectură](#7-arhitectură)
-8. [API](#8-api)
-9. [Configurare](#9-configurare)
-
----
-
-## 1. Pornire rapidă
-
-### Varianta A — Docker (recomandată, orice sistem de operare)
-Necesită doar [Docker Desktop](https://www.docker.com/products/docker-desktop/) (și Git).
+Ai nevoie doar de Git și Docker Desktop.
 
 ```bash
 git clone https://github.com/tudorsan/leave-and-remote-management.git
@@ -32,287 +16,175 @@ cd leave-and-remote-management
 docker compose up --build -d
 ```
 
-| Ce | Unde |
-|---|---|
-| Aplicația | http://localhost:8080 |
-| Contractul API (OpenAPI) | http://localhost:8081/openapi/v1.json |
-| Emailurile simulate și log-ul backend-ului | `docker compose logs -f api` |
+Prima pornire durează câteva minute, cât se descarcă imaginile. După aceea aplicația e pe **http://localhost:8080**. Baza de date se creează singură prin migrări și primește la prima pornire niște utilizatori de test și sărbătorile legale.
 
-Prima pornire durează câteva minute (se descarcă imaginile). Baza de date, migrările, datele de test și sărbătorile legale se creează automat.
+Emailurile nu pleacă de fapt nicăieri (specificația permite să fie simulate), ci apar în log-ul backend-ului, așa că merită ținut deschis:
 
 ```bash
-docker compose down      # oprește aplicația (datele rămân)
-docker compose down -v   # oprește și șterge baza de date (pornire de la zero)
+docker compose logs -f api
 ```
 
-### Varianta B — fără Docker (Windows, SQL Server LocalDB)
-Necesită [.NET 10 SDK](https://dotnet.microsoft.com/download), [Node.js](https://nodejs.org/) 22.18+ sau 24.12+ și SQL Server LocalDB (inclus în Visual Studio).
+Oprire: `docker compose down`. Dacă vrei să o iei de la zero cu baza goală: `docker compose down -v`.
 
-Terminalul 1 — backend (http://localhost:5130, baza `LeaveRemoteDb`, creată automat prin migrări):
+### Fără Docker (Windows, cu LocalDB)
+
+Așa am lucrat eu în timpul dezvoltării. Trebuie .NET 10 SDK, Node.js (22.18+ sau 24.12+) și SQL Server LocalDB, care vine cu Visual Studio.
+
+Backend-ul, într-un terminal (pornește pe http://localhost:5130 și își creează baza `LeaveRemoteDb`):
+
 ```bash
 dotnet run --project backend/LeaveRemote.Api
 ```
 
-Terminalul 2 — frontend (http://localhost:5173, cererile `/api` sunt trimise către backend):
+Frontend-ul, în alt terminal:
+
 ```bash
 cd frontend
 npm ci
 npm run dev
 ```
 
-> Pe Windows, dacă PowerShell blochează scriptul `npm.ps1`, folosește `npm.cmd` în loc de `npm`.
+și apoi http://localhost:5173. Dacă PowerShell refuză să ruleze `npm` din cauza politicii de scripturi, `npm.cmd` în loc de `npm` rezolvă problema.
 
----
+## Conturi de test
 
-## 2. Conturi de test
-
-Pe pagina de autentificare se alege întâi **rolul** (cardul), apoi se introduc datele contului. Dacă rolul ales nu corespunde contului, aplicația cere alegerea rolului corect („Schimbă rolul”).
-
-| Rol | Email | Parolă | Cine este |
+| Rol | Email | Parolă | |
 |---|---|---|---|
-| Admin | `admin@example.com` | `Admin123!` | Alex Admin |
-| Manager | `manager@example.com` | `Manager123!` | Maria Manager — echipa Development, superior: Admin |
-| Angajat | `employee@example.com` | `Employee123!` | Andrei — echipa Development, manager: Maria |
-| Angajat | `employee2@example.com` | `Employee123!` | Ioana — echipa Development, manager: Maria |
+| Admin | admin@example.com | Admin123! | Alex |
+| Manager | manager@example.com | Manager123! | Maria, echipa Development (șeful ei e adminul) |
+| Angajat | employee@example.com | Employee123! | Andrei, în echipa Mariei |
+| Angajat | employee2@example.com | Employee123! | Ioana, tot în echipa Mariei |
 
-Setările globale pornesc cu valorile implicite din specificație, iar sărbătorile legale ale României sunt generate pentru anul curent și pentru anii în care se pot face cereri.
+La login alegi mai întâi rolul și abia apoi scrii datele contului. Dacă alegi alt rol decât are contul, aplicația îți spune și te lasă să-l schimbi.
 
----
+## Ce merită încercat
 
-## 3. Ghid de evaluare pas cu pas
+Am pus mai jos un traseu prin aplicație care atinge toate cerințele din specificație. Durează cam un sfert de oră. Numerele din paranteze sunt cele din PDF.
 
-Un parcurs de aproximativ 15 minute care trece prin fiecare cerință. Ține deschis un terminal cu `docker compose logs -f api` (sau terminalul backend-ului, în varianta B): acolo apar emailurile simulate.
+**Ca Andrei (angajat)**
 
-### 3.1 Angajatul — cereri de concediu (cerințele 7–10, regulile 1–3)
-Autentificare: **Angajat**, `employee@example.com`.
-1. **Cerere nouă → Solicită concediu**: o perioadă de câteva zile, care începe la cel puțin 3 zile de azi, tip „Concediu de odihnă”, cu un comentariu.
-   - confirmarea afișează **numărul de zile lucrătoare** (fără weekend și sărbători);
-   - cererea apare **imediat în calendar**, cu culoarea deschisă = „În așteptare”;
-   - în log apare emailul **„Cerere nouă de aprobat”** către Maria.
-2. Încearcă o perioadă care **începe peste mai puțin de 3 zile** → refuzată (preaviz). Același lucru ca **„Concediu medical”** → acceptat (preavizul se aplică doar odihnei).
-3. Încearcă o perioadă **suprapusă** cu prima cerere → refuzată (regula 1).
-4. **Soldul meu de concediu**: total 21, zilele cerute apar ca „blocate în cereri în așteptare” (cerința 18).
-5. **Cererile mele**: cererea în așteptare se poate **edita** și **anula**.
+- Cere un concediu de odihnă de câteva zile, care să înceapă peste cel puțin 3 zile. La confirmare vezi câte zile lucrătoare are (fără weekend și sărbători), iar cererea apare imediat în calendar, în culoarea deschisă, „în așteptare” (7, 8, 9). În log apare emailul către Maria.
+- Dacă încerci un concediu de odihnă care începe mai devreme de 3 zile, e refuzat. Același interval ca medical e acceptat, pentru că preavizul l-am aplicat doar la odihnă.
+- O cerere peste una existentă e refuzată (regula 1), la fel una care depășește soldul (regula 3).
+- „Soldul meu de concediu” arată totalul, ce ai consumat și ce e blocat în cereri în așteptare (18).
+- Pentru remote, alegi mai multe zile direct din calendar, într-un singur formular (11). Implicit sunt aprobate automat (13). Weekendul, sărbătorile (de exemplu 1 decembrie), a treia zi din aceeași săptămână și zilele mai departe de 30 de zile sunt refuzate, cu mesaj (12, regulile 4 și 5).
+- În „Cererile mele” poți edita sau anula cererile în așteptare și le poți anula pe cele aprobate, dar numai înainte să înceapă (10). Tot de acolo descarci zilele aprobate în format `.ics` (se importă în Google Calendar sau Outlook) sau `.csv` pentru Excel (6).
+- Calendarul se poate vedea pe lună sau pe săptămână și se poate filtra după tipul absenței (4, 5, 6).
 
-### 3.2 Angajatul — lucru remote (cerințele 11–13, regulile 4–5)
-1. **Cerere nouă → Solicită lucru remote** și selectează **mai multe zile direct în calendar**.
-   - zilele sunt aprobate automat (`remote.requires_approval = false`) și apar cu culoarea plină;
-   - în log apare emailul de confirmare.
-2. Selectează **o zi de weekend** sau **o sărbătoare** (ex. 1 decembrie) → refuzată, cu mesaj explicit.
-3. Selectează **3 zile din aceeași săptămână** → refuzată (maximum 2 pe săptămâna luni–duminică).
-4. Selectează o zi **mai departe de 30 de zile** → refuzată (orizontul remote).
+**Ca Maria (manager)**
 
-### 3.3 Calendarul (cerințele 4–6)
-1. Navighează între luni; filtrează după **tipul de absență**.
-2. Comută pe **Săptămână**: membrii echipei pe rânduri, zilele pe coloane, aceleași culori.
-3. **Cererile mele → Calendar (.ics)** și **Excel (.csv)**: exportul conține **doar zilele proprii aprobate**. Fișierul `.ics` se importă în Google Calendar sau Outlook.
+- În „Cereri în așteptare” apar cererile echipei ei. Respingerea cere un motiv de cel puțin 10 caractere (14, regula 8), iar Andrei vede motivul în aplicație și îl primește pe email (15, 16).
+- Dacă Maria își face singură o cerere, nu și-o poate aproba (regula 7). Cererea ajunge la superiorul ei, adică la admin.
+- Limita de absențe din echipă (regula 6): cu un concediu aprobat al lui Andrei, Ioana nu mai poate lua concediu de odihnă în aceleași zile, pentru că ar lipsi 2 din 3 oameni, adică peste 50%.
+- „Solduri de concediu” îi arată soldurile echipei.
 
-### 3.4 Managerul — aprobări (cerințele 14–15, regulile 6–8)
-Autentificare: **Manager**, `manager@example.com`.
-1. **Cereri în așteptare**: cererea lui Andrei. **Respinge** cu un motiv scurt (sub 10 caractere) → refuzat; apoi cu un motiv valid → în log apare emailul către Andrei, cu motivul.
-2. Fă o cerere nouă ca Andrei și **aprob-o** ca Maria → soldul lui Andrei arată zilele consumate.
-3. Ca Maria, cere un concediu și verifică faptul că **nu îl poți aproba singur** (cererea nu apare în lista ta; o aprobă Adminul — regula 7).
-4. **Limita echipei (regula 6):** cu concediul lui Andrei aprobat, cere ca Ioana un concediu de odihnă în aceleași zile → refuzat (2 din 3 membri = 67% > 50%).
-5. **Solduri de concediu**: Maria vede soldurile echipei sale.
-6. Ca Andrei, anulează concediul aprobat (înainte de început) → zilele revin în sold, iar Maria primește email.
+**Ca admin**
 
-### 3.5 Adminul — administrare și setări (cerințele 2, 17, setările)
-Autentificare: **Admin**, `admin@example.com`.
-1. **Utilizatori**: creează un utilizator nou cu rol, echipă și manager; **dezactivează-l** — nu se mai poate autentifica, iar cererile lui în așteptare se anulează. Poate fi reactivat.
-2. **Utilizatori → Editează → alocare anuală**: setează alt număr de zile pentru un angajat (cerința 17).
-3. **Setări globale**: activează `remote.requires_approval` → o zi remote nouă rămâne „În așteptare” și trebuie aprobată. Cererile deja existente nu se revalidează.
-4. **Setări globale → sărbători**: adaugă o sărbătoare → zilele lucrătoare ale cererilor **noi** o exclud.
-5. **Calendar**: Adminul vede toate echipele și poate filtra pe echipă.
+- Creează utilizatori cu rol, echipă și manager, și îi poate dezactiva fără să-i șteargă (2). Un cont dezactivat nu se mai poate loga, iar cererile lui în așteptare se anulează. Contul se poate și reactiva.
+- Din fișa unui angajat schimbă numărul de zile de concediu pe an (17).
+- Din „Setări globale” modifică toate setările din specificație și lista de sărbători. De exemplu, dacă pornești aprobarea pentru remote, următoarea zi remote rămâne în așteptare. Cererile deja făcute nu se revalidează.
+- Vede calendarul tuturor echipelor și poate filtra pe echipă.
 
-### 3.6 Resetarea parolei (cerința 3, opțională)
-1. Pe login: **Ai uitat parola?** → `employee2@example.com`.
-2. Copiază linkul din emailul apărut în log și deschide-l → alege o parolă nouă.
-3. Autentifică-te cu parola nouă; sesiunile vechi ale contului au fost închise.
+**Resetarea parolei** (3): pe pagina de login, „Ai uitat parola?”, apoi linkul din emailul din log. După schimbarea parolei, sesiunile vechi ale contului nu mai sunt valabile.
 
-### 3.7 Permisiuni verificate în backend
-Încercările de a ocoli interfața sunt refuzate de API. Exemple (cu tokenul unui angajat): `GET /api/settings` → 403, `PATCH /api/leave-requests/{id}/approve` → 403, `GET /api/leave-balances/{alt utilizator}` → 403. Toată matricea este acoperită de testele din `PermissionMatrixTests`.
+**Permisiunile** sunt verificate în backend, nu doar ascunse în interfață. Cu tokenul unui angajat, de exemplu, `GET /api/settings` sau aprobarea unei cereri întorc 403. Rolul și starea contului sunt recitite din baza de date la fiecare request, deci schimbarea rolului sau dezactivarea au efect imediat, chiar dacă omul era deja logat.
 
----
+## Cum am interpretat unele lucruri
 
-## 4. Acoperirea specificației
+Specificația lasă câteva întrebări deschise. Am ales așa și cred că merită spus de ce.
 
-### Roluri și permisiuni
-| Acțiune | Angajat | Manager | Admin | Teste |
-|---|---|---|---|---|
-| Vede calendarul echipei sale | ✔ | ✔ | ✔ | `PermissionMatrixTests` |
-| Vede calendarul tuturor echipelor | ✘ | ✘ | ✔ | `PermissionMatrixTests` |
-| Creează / editează / anulează propriile cereri | ✔ | ✔ | ✔ | `PermissionMatrixTests` |
-| Aprobă / respinge cereri din echipa sa | ✘ | ✔ | — | `PermissionMatrixTests`, `ReviewPolicyTests` |
-| Aprobă / respinge orice cerere | ✘ | ✘ | ✔ | `PermissionMatrixTests` |
-| Vede soldul altora | ✘ | echipa sa | toți | `PermissionMatrixTests` |
-| Administrează utilizatori, echipe, roluri, setări, solduri | ✘ | ✘ | ✔ | `PermissionMatrixTests`, `AdministrationTests` |
+**Cine aprobă ce.** Cererea unui angajat o aprobă managerii echipei lui. Cererea unui manager o aprobă șeful lui direct, cum zice PDF-ul. Adminul poate aproba orice. Regula „managerul nu își aprobă propriile cereri” am aplicat-o la toată lumea, inclusiv la admin: mi s-a părut ciudat ca tocmai el să fie excepția. În lista de aprobat apar doar cererile pe care chiar le poți decide.
 
-Permisiunile se verifică în backend la fiecare request: rolul și starea contului sunt recitite din baza de date, deci un cont dezactivat sau cu rol schimbat este tratat corect chiar dacă are un token emis anterior.
+**Soldul managerului.** Managerul vede soldurile echipei lui și pe ale subordonaților direcți, chiar dacă sunt în altă echipă. Altfel ar fi aprobat cereri fără să vadă soldul omului.
 
-### Cerințe funcționale
-| # | Cerința | Implementare | Teste |
-|---|---|---|---|
-| 1 | Login email + parolă, JWT, parole bcrypt | `AuthService` | `AuthAndErrorTests` |
-| 2 | Admin creează utilizatori (rol, echipă, manager); dezactivare fără ștergere | `UserService` | `AdministrationTests` |
-| 3 *(Op)* | Resetare parolă prin link (simulat în log) | `PasswordResetService` | `PasswordResetTests` |
-| 4 | Calendar lunar al echipei, culori per tip și stare | `CalendarService`, `CalendarGrid.vue` | `LeaveRequestTests`, `HomeCalendar.spec` |
-| 5 | Navigare între luni, filtru echipă (Admin) și tip | `CalendarService` | `PermissionMatrixTests`, `RemoteRequestTests` |
-| 6 *(Op)* | Vedere săptămânală și export al zilelor aprobate | `CalendarService`, `ExportService` | `CalendarRangeTests`, `ExportTests` |
-| 7 | Cerere de concediu: interval, tip, comentariu | `LeaveRequestService` | `LeaveRequestTests` |
-| 8 | Zile lucrătoare fără weekend și sărbători | `WorkingDays` | `WorkingDaysTests`, `LeaveRequestTests` |
-| 9 | Cererea apare imediat în calendar, „În așteptare” | `CalendarService` | `LeaveRequestTests` |
-| 10 | Anulare: oricând dacă e în așteptare, înainte de start dacă e aprobată | `LeaveRequestService` | `LeaveRequestTests` |
-| 11 | Mai multe zile remote într-un formular, selectate în calendar | `RemoteRequestService` | `RemoteRequestTests` |
-| 12 | Orizont remote configurat, refuz cu mesaj explicit | `RemoteRequestService` | `RemoteRequestTests` |
-| 13 | Remote cu aprobare sau aprobat automat | `RemoteRequestService` | `SettingsTests` |
-| 14 | Lista de cereri în așteptare, motiv obligatoriu la respingere | `ReviewPolicy` | `BusinessRuleTests` |
-| 15 | Solicitantul vede starea și motivul | `LeaveRequestService` | `BusinessRuleTests` |
-| 16 *(Op)* | Notificare prin email la schimbarea stării (simulat în log) | `NotificationService` | `NotificationTests` |
-| 17 | Sold anual per angajat, implicit la creare; aprobat consumă, anulat restituie | `LeaveBalanceService` | `AdministrationTests`, `BusinessRuleTests` |
-| 18 | Sold rămas, consumat și blocat în cereri în așteptare | `LeaveBalanceService` | `AdministrationTests` |
+**Preavizul** (`leave.min_days_ahead`) l-am aplicat doar concediului de odihnă, cum scrie în tabelul de setări. Niciun tip de concediu nu poate începe în trecut.
 
-### Reguli de business și validări
-| # | Regula | Teste |
-|---|---|---|
-| 1 | O zi — cel mult o cerere activă, indiferent de tip (și la cereri simultane) | `BusinessRuleTests` |
-| 2 | Concediul nu începe în trecut; sfârșit ≥ început | `LeaveRequestTests` |
-| 3 | Odihna nu depășește soldul disponibil | `BusinessRuleTests` |
-| 4 | Remote nu în weekend sau sărbătoare | `RemoteRequestTests` |
-| 5 | Maximum de zile remote pe săptămâna luni–duminică, cu zilele aprobate | `RemoteRequestTests`, `SettingsTests` |
-| 6 | Procentul maxim din echipă absent, pe fiecare zi, doar concedii aprobate | `BusinessRuleTests` |
-| 7 | Nimeni nu își aprobă propria cerere | `BusinessRuleTests`, `ReviewPolicyTests` |
-| 8 | Motiv de respingere de minimum 10 caractere | `BusinessRuleTests`, `AppClockAndInputTests` |
-| 9 | Date calendaristice, fără oră și fus orar | `AppClockAndInputTests` |
+**Soldul pe an.** Doar concediul de odihnă consumă din sold. Soldul e pe an calendaristic, deci un concediu peste Revelion ia din fiecare an zilele care îi revin. Când adminul schimbă numărul de zile al cuiva pentru anul curent, valoarea rămâne și pentru anii următori, pentru că o consider o proprietate a angajatului, nu a unui an anume. Nu poate fi mai mică decât ce a consumat și a rezervat deja omul.
 
-Toate erorile de validare au același format, cu cod stabil și mesaj lizibil: `{ "code": "INSUFFICIENT_LEAVE_BALANCE", "message": "Sold insuficient pentru 2026. …" }`, cu statusul 400 (date invalide), 409 (conflict de stare sau de reguli), 401, 403 sau 404.
+**Limita de absențe din echipă.** O calculez pe fiecare zi lucrătoare: colegii cu concediu aprobat plus cel care cere, împărțit la membrii activi ai echipei. Dacă procentul depășește limita, cererea e blocată. Verificarea se face la creare și încă o dată la aprobare, pentru că între timp se pot aproba alte concedii. Concediul medical nu e blocat de limită (nu-l poți programa), dar odată aprobat contează la ceilalți. Remote-ul nu e absență. Un caz de știut: într-o echipă cu un singur om, cu limita implicită de 50%, omul acela nu poate lua concediu de odihnă, pentru că ar însemna 100% absent. E aplicarea literală a regulii, iar adminul poate ridica limita.
 
-### Setări configurabile
-Toate cele 9 setări din specificație (`remote.max_days_ahead`, `remote.min_days_ahead`, `remote.max_days_per_week`, `remote.requires_approval`, `leave.max_days_ahead`, `leave.min_days_ahead`, `leave.default_annual_days`, `leave.max_team_absent_pct`, `holidays`) sunt editabile de Admin, persistate în baza de date (tabel cheie–valoare) și citite la fiecare validare. Testele: `SettingsTests`.
+**Remote, câte o cerere pe zi.** PDF-ul sugerează asta (start = end) și am mers pe varianta asta: poți trimite mai multe zile odată, sunt validate împreună (dacă una nu e bună, nu se salvează nimic), dar apoi fiecare zi se aprobă sau se anulează separat. Limita pe săptămână numără zilele deja aprobate, cum zice regula 5, și o verific din nou la aprobare, ca să nu poată fi ocolită cu mai multe cereri în așteptare.
 
-### Stările unei cereri
-`În așteptare` → `Aprobată` / `Respinsă` / `Anulată`, iar `Aprobată` → `Anulată` înainte de data de început; zilele remote aprobate automat intră direct în `Aprobată`. Orice altă tranziție este refuzată cu 409 (`BusinessRuleTests`).
+**Setările nu schimbă cererile vechi.** Fiecare cerere ține minte regulile și sărbătorile de la momentul creării, iar editarea sau aprobarea ei se fac după acelea.
 
----
+**Editare și anulare.** Se pot edita doar cererile în așteptare. Una aprobată se anulează și se face alta. „Înainte de start” înseamnă cel târziu cu o zi înainte de prima zi. Orice trecere care nu e în diagrama de stări din PDF (de exemplu aprobarea unei cereri anulate sau respingerea uneia deja aprobate) e refuzată cu 409.
 
-## 5. Decizii și presupuneri
+**Ce e „azi”.** Toate datele sunt date calendaristice, fără oră. „Azi” e data din România (Europe/Bucharest), indiferent unde rulează serverul, ca să nu apară decalaje în jurul miezului nopții.
 
-Acolo unde specificația lasă loc de interpretare, am ales varianta de mai jos.
+**Cereri uitate.** O cerere care a rămas „în așteptare” după ultima ei zi nu mai are cum să fie aprobată, dar ar ține blocat soldul. Aplicația o anulează singură (verifică la fiecare oră), notează motivul și îi trimite omului un email. Am ales să aștept finalul perioadei, nu începutul ei, ca un concediu medical anunțat cu întârziere să poată fi totuși aprobat. N-am introdus o stare nouă, ca să rămân la cele patru din diagramă.
 
-**Aprobări**
-- **Cine aprobă:** cererea unui angajat — managerii echipei sale; cererea unui Manager (sau Admin) — superiorul său direct; Adminul aprobă orice cerere. Lista „Cereri în așteptare” conține exact cererile pe care utilizatorul le poate decide.
-- **Regula 7 se aplică tuturor:** nici Adminul nu își poate aproba sau respinge propria cerere (o decide alt Admin).
-- **Managerul vede soldurile** echipei sale și ale subordonaților direcți, chiar dacă sunt în altă echipă (le aprobă cererile).
+**Sărbătorile** (inclusiv Paștele ortodox, Vinerea Mare și Rusaliile) se generează singure pentru toți anii în care se pot face cereri, deci și la trecerea în anul nou, fără repornire. Un an se generează o singură dată, ca să nu suprascriu modificările adminului.
 
-**Concedii și sold**
-- **Preavizul** (`leave.min_days_ahead`) se aplică doar concediului de odihnă; niciun concediu nu poate începe în trecut.
-- **Doar concediul de odihnă consumă sold.** Soldul este pe an calendaristic: un concediu peste Anul Nou consumă din fiecare an zilele lui.
-- **Alocarea setată de Admin** pentru anul curent sau unul viitor devine și maximul moștenit de anii următori (este o proprietate a angajatului). Nu poate fi mai mică decât zilele deja consumate și rezervate.
-- **Editarea** este permisă doar cererilor în așteptare. O cerere aprobată se anulează și se refac.
-- **„Înainte de start”** înseamnă cel târziu cu o zi înainte de data de început.
+**Conturi.** Parolele sunt salvate cu bcrypt, iar sesiunea e un token JWT care ține 8 ore. Un cont dezactivat e scos și din calendar, și din calculul limitei echipei. La resetarea parolei, linkul e valabil 30 de minute și merge o singură dată. În baza de date țin doar amprenta (SHA-256) tokenului, nu tokenul în sine. Răspunsul e același și pentru o adresă care nu există, ca să nu se poată afla ce conturi sunt.
 
-**Limita de absențe a echipei (regula 6)**
-- Se calculează pentru fiecare zi lucrătoare: (colegi cu concediu aprobat + solicitantul) / membrii activi ai echipei; cererea este blocată dacă procentul **depășește** limita. Se verifică la creare **și din nou la aprobare**.
-- **Concediul medical nu este blocat** de limită (nu poate fi planificat), dar odată aprobat contează ca absență pentru ceilalți. Lucrul remote nu este absență.
-- **Echipă cu un singur membru:** cu limita implicită de 50%, singurul membru nu poate lua concediu de odihnă (100% > 50%) — aplicarea literală a regulii. Adminul poate ridica limita din setări.
+**Emailurile** trec printr-o interfață (`IEmailSender`). Acum implementarea lor e o scriere în log, dar poate fi înlocuită cu una SMTP fără alte schimbări. Pleacă doar după ce operația s-a salvat, deci o aprobare eșuată nu trimite nimic.
 
-**Lucru remote**
-- **Fiecare zi este o cerere separată** (start = end, cum sugerează specificația): mai multe zile se trimit dintr-un singur formular și se validează împreună (tot sau nimic), dar fiecare zi poate fi aprobată, respinsă sau anulată independent.
-- **Limita săptămânală** numără zilele deja aprobate (regula 5) și se verifică din nou la aprobare, ca mai multe zile în așteptare să nu o poată ocoli.
+**Cereri simultane.** Scrierile pe cereri sunt serializate cu un lock de aplicație în SQL Server, în aceeași tranzacție, ca două cereri trimise în același moment să nu poată trece amândouă de verificarea de sold sau de suprapunere.
 
-**Setări și timp**
-- **Setările nu revalidează cererile existente:** fiecare cerere păstrează regulile și sărbătorile în vigoare la creare; editarea și aprobarea o folosesc pe acestea.
-- **„Azi”** este data calendaristică din România (Europe/Bucharest), indiferent de fusul orar al serverului. Datele sunt `DateOnly` în .NET și `date` în SQL Server.
-- **Sărbătorile legale** (inclusiv Paștele ortodox, Vinerea Mare și Rusaliile) sunt generate automat pentru toți anii în care se pot face cereri, la pornire și apoi în fiecare oră; un an este generat o singură dată, deci modificările Adminului sunt respectate.
+## Teste
 
-**Întreținere automată**
-- **Cererile rămase „În așteptare” după ultima zi a perioadei** sunt anulate automat (cu motiv), soldul rezervat se eliberează, iar solicitantul primește email. Cât timp perioada nu s-a încheiat, cererea poate fi încă decisă (ex. un concediu medical anunțat după ce a început). Se folosește starea „Anulată”, păstrând cele 4 stări din specificație.
+Am scris teste pentru aproape fiecare regulă din PDF: 171 în backend și 25 în frontend.
 
-**Conturi și sesiuni**
-- **Dezactivarea** blochează autentificarea (și tokenurile emise deja), anulează cererile în așteptare și scoate utilizatorul din calendar și din calculul limitei echipei. Contul poate fi reactivat.
-- **Sesiunea** durează 8 ore. Schimbarea parolei închide toate sesiunile contului.
-- **Resetarea parolei:** tokenul are 32 de octeți aleatori, în baza de date se păstrează doar amprenta lui SHA-256, expiră în 30 de minute și poate fi folosit o singură dată; răspunsul este același dacă adresa există sau nu.
-
-**Notificări**
-- Emailurile sunt simulate în log prin `LogEmailSender` (înlocuibil cu un expeditor SMTP fără alte modificări). Sunt trimise doar după ce operația a fost salvată; o operație eșuată nu trimite nimic.
-
-**Concurență**
-- Scrierile asupra cererilor sunt serializate cu un lock de aplicație SQL Server în aceeași tranzacție, ca regulile de suprapunere, sold și limite să rămână corecte și la cereri simultane.
-
----
-
-## 6. Teste automate
-
-### Backend — 171 de teste (xUnit)
 ```bash
 dotnet test backend/backend.slnx
 ```
-- **Teste unitare** (`LeaveRemote.Api.Tests/Unit`): zile lucrătoare, politica de aprobare, Paștele ortodox, ceasul în ora României, motivul de respingere.
-- **Teste de integrare** (`LeaveRemote.Api.Tests/Integration`): pornesc API-ul real (`WebApplicationFactory`) pe o bază SQL Server LocalDB nouă pentru fiecare clasă de teste, creată prin migrări și ștearsă la final, cu „azi” fixat la 13.11.2026. Acoperă matricea de permisiuni, cerințele, regulile de business, setările, notificările, resetarea parolei, exportul, expirarea automată și formatul erorilor.
 
-> Testele de integrare folosesc SQL Server LocalDB, deci rulează pe Windows.
+Cele de integrare pornesc API-ul real (`WebApplicationFactory`) pe câte o bază LocalDB nouă pentru fiecare clasă de teste, cu data de „azi” fixată la 13 noiembrie 2026, și o șterg la final. Din cauza LocalDB, rulează doar pe Windows. Le-am grupat după subiect, iar numele lor se citesc ca specificația: `PermissionMatrixTests` urmează tabelul de roluri rând cu rând, `BusinessRuleTests` acoperă regulile de business, iar `SettingsTests`, `NotificationTests`, `PasswordResetTests` și celelalte au fiecare zona lor. Pe lângă ele sunt teste unitare pentru calculul zilelor lucrătoare, data Paștelui, regulile de aprobare și altele.
 
-### Frontend — 25 de teste (Vitest)
+Pentru frontend:
+
 ```bash
 cd frontend
 npm run test:unit -- --run
-npm run build        # verificarea tipurilor (vue-tsc) și build-ul de producție
+npm run build
 ```
 
----
+(`build` verifică și tipurile TypeScript.)
 
-## 7. Arhitectură
+## Cum e organizat codul
 
 ```
-├── docker-compose.yml               SQL Server + API + frontend
-├── backend/
-│   ├── LeaveRemote.Api/
-│   │   ├── Controllers/             strat HTTP subțire: autentificare, apel de serviciu, răspuns
-│   │   ├── Services/                regulile de business (concedii, remote, sold, setări, calendar,
-│   │   │                            utilizatori, echipe, export, resetare parolă, sărbători, expirare)
-│   │   │   └── Notifications/       NotificationService, coada de emailuri, LogEmailSender
-│   │   ├── Models/  Data/           entități EF Core, AppDbContext, seed, lock de scriere
-│   │   ├── Migrations/              schema bazei de date (aplicată automat la pornire)
-│   │   └── DTOs/                    corpurile cererilor și ale răspunsurilor
-│   └── LeaveRemote.Api.Tests/       teste unitare și de integrare
-└── frontend/
-    └── src/
-        ├── views/                   Start, Login, calendarul (Home), resetarea parolei
-        ├── components/              calendar lunar și săptămânal, formulare, aprobări,
-        │                            solduri, administrare, export
-        └── stores/                  sesiunea de autentificare (Pinia)
+docker-compose.yml          baza de date + API + frontend
+backend/
+  LeaveRemote.Api/
+    Controllers/            doar HTTP: cine e utilizatorul, ce serviciu se apelează, ce răspuns se dă
+    Services/               regulile propriu-zise (concedii, remote, sold, calendar, setări, utilizatori,
+                            echipe, export, resetare parolă, sărbători, expirarea cererilor)
+      Notifications/        emailurile: ce se scrie, coada, trimiterea (în log)
+    Models/, Data/          entitățile, DbContext, datele de test
+    Migrations/             schema bazei, aplicată automat la pornire
+    DTOs/                   ce primește și ce întoarce API-ul
+  LeaveRemote.Api.Tests/    testele (unitare și de integrare)
+frontend/src/
+  views/                    pagina de start, login, aplicația propriu-zisă, resetarea parolei
+  components/               calendarul lunar și săptămânal, formularele, aprobările, soldurile,
+                            administrarea, exportul
+  stores/                   sesiunea (Pinia)
 ```
 
-- **Controllerele nu conțin reguli**: încarcă utilizatorul curent și traduc rezultatul serviciului (`Result<T>` / `ServiceError`) în HTTP.
-- **Serviciile conțin regulile**, ușor de testat: „azi” vine dintr-un ceas injectabil (`TimeProvider`), iar emailurile printr-o interfață (`IEmailSender`).
-- **Frontend-ul doar afișează erorile** primite de la backend; validările din interfață sunt doar pentru confort.
+Am încercat să țin controllerele subțiri și toată logica în servicii, ca să poată fi testată ușor. Data curentă vine dintr-un `TimeProvider` injectat, așa că în teste pot „muta” ziua. Erorile au peste tot aceeași formă, `{ "code": "...", "message": "..." }`, cu 400 pentru date greșite, 409 pentru conflicte cu regulile sau cu starea cererii, plus 401, 403 și 404. Frontend-ul doar afișează mesajul primit.
 
----
+## API
 
-## 8. API
+Rutele cer `Authorization: Bearer <token>`, în afară de login și resetarea parolei. Contractul complet e la `/openapi/v1.json` (în varianta Docker: http://localhost:8081/openapi/v1.json).
 
-Toate rutele, cu excepția autentificării, cer header-ul `Authorization: Bearer <token>`. Contractul complet: `/openapi/v1.json`.
+- **Autentificare:** `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`
+- **Concedii:** `GET` și `POST /api/leave-requests`, `PUT /api/leave-requests/{id}`, `GET /api/leave-requests/pending`, `PATCH /api/leave-requests/{id}/approve`, `/reject`, `/cancel`
+- **Remote:** aceleași rute, sub `/api/remote-requests`
+- **Calendar:** `GET /api/calendar?year=&month=&teamId=&type=` (lunar) și `GET /api/calendar/range?from=&to=` (săptămânal)
+- **Sold:** `GET /api/leave-balances/me`, `GET /api/leave-balances/{userId}`, `PUT /api/leave-balances/{userId}/{year}` (admin)
+- **Export:** `GET /api/exports/my-approved-days.ics` și `.csv`
+- **Administrare** (admin): `/api/users` (cu `deactivate` și `reactivate`), `/api/teams`, `/api/settings`, `PUT /api/settings/holidays`
 
-| Zona | Rute |
-|---|---|
-| Autentificare | `POST /api/auth/login` · `GET /api/auth/me` · `POST /api/auth/forgot-password` · `POST /api/auth/reset-password` |
-| Concedii | `GET/POST /api/leave-requests` · `PUT /api/leave-requests/{id}` · `GET /api/leave-requests/pending` · `PATCH /api/leave-requests/{id}/approve \| reject \| cancel` |
-| Remote | `GET/POST /api/remote-requests` · `PUT /api/remote-requests/{id}` · `GET /api/remote-requests/pending` · `PATCH /api/remote-requests/{id}/approve \| reject \| cancel` |
-| Calendar | `GET /api/calendar?year&month&teamId&type` · `GET /api/calendar/range?from&to&teamId&type` |
-| Sold | `GET /api/leave-balances/me` · `GET /api/leave-balances/{userId}` · `PUT /api/leave-balances/{userId}/{year}` (Admin) |
-| Export | `GET /api/exports/my-approved-days.ics` · `GET /api/exports/my-approved-days.csv` |
-| Administrare (Admin) | `/api/users` (+ `deactivate`, `reactivate`) · `/api/teams` (+ `deactivate`) · `/api/settings` · `PUT /api/settings/holidays` |
+## Configurare
 
----
+Setările din specificație (orizonturile, limitele, aprobarea remote, procentul de absențe, zilele implicite de concediu și sărbătorile) se modifică din aplicație, de către admin, și stau în baza de date. În `appsettings.json` rămân doar cele tehnice:
 
-## 9. Configurare
+- `ConnectionStrings:DefaultConnection`: implicit LocalDB, baza `LeaveRemoteDb`
+- `Jwt:Key`: în `appsettings.Development.json` e o cheie doar pentru dezvoltare. În producție se dă prin variabila de mediu `Jwt__Key`.
+- `Jwt:ExpirationMinutes`: 480 (o zi de lucru)
+- `Frontend:BaseUrl`: adresa din linkurile de resetare a parolei
+- `PasswordReset:TokenLifetimeMinutes`: 30
+- `Maintenance:IntervalMinutes`: cât de des se verifică cererile uitate și sărbătorile (60)
 
-| Cheie | Implicit | Rol |
-|---|---|---|
-| `ConnectionStrings:DefaultConnection` | LocalDB, baza `LeaveRemoteDb` | conexiunea SQL Server |
-| `Jwt:Key` | o cheie de dezvoltare în `appsettings.Development.json` | cheia de semnare a tokenurilor — **în producție se setează prin variabilă de mediu** (`Jwt__Key`) |
-| `Jwt:ExpirationMinutes` | 480 | durata sesiunii |
-| `Frontend:BaseUrl` | `http://localhost:5173` | adresa folosită în linkurile de resetare a parolei |
-| `PasswordReset:TokenLifetimeMinutes` | 30 | valabilitatea linkului de resetare |
-| `Maintenance:IntervalMinutes` | 60 | cât de des rulează generarea sărbătorilor și expirarea cererilor |
-
-În mediul `Development`, aplicația populează datele de test și publică contractul OpenAPI. Docker Compose folosește valori demonstrative pentru parola SQL Server și cheia JWT, care se pot suprascrie prin variabilele `MSSQL_SA_PASSWORD` și `JWT_KEY`.
+În Docker, parola SQL Server și cheia JWT sunt valori de demo, care se pot schimba cu variabilele `MSSQL_SA_PASSWORD` și `JWT_KEY`.
