@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using LeaveRemote.Api.Data;
+using LeaveRemote.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -35,8 +37,11 @@ public class TeamsController : ControllerBase
     }
 
     [HttpPost]
+    [RequestWriteTransaction]
     public async Task<IActionResult> CreateTeam([FromBody] CreateTeamRequest request)
     {
+        if (!await IsCurrentAdminAsync()) return Forbid();
+
         var name = request.Name?.Trim();
 
         if (string.IsNullOrWhiteSpace(name))
@@ -77,10 +82,13 @@ public class TeamsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [RequestWriteTransaction]
         public async Task<IActionResult> UpdateTeam(
             int id,
             [FromBody] CreateTeamRequest request)
         {
+            if (!await IsCurrentAdminAsync()) return Forbid();
+
             var name = request.Name?.Trim();
 
             if (string.IsNullOrWhiteSpace(name))
@@ -127,8 +135,11 @@ public class TeamsController : ControllerBase
     }
 
     [HttpPatch("{id:int}/deactivate")]
+    [RequestWriteTransaction]
     public async Task<IActionResult> DeactivateTeam(int id)
     {
+        if (!await IsCurrentAdminAsync()) return Forbid();
+
         var team = await _db.Teams.FindAsync(id);
 
         if (team == null)
@@ -149,6 +160,11 @@ public class TeamsController : ControllerBase
             });
         }
 
+        if (await _db.Users.AnyAsync(u => u.TeamId == id && u.IsActive))
+        {
+            return Conflict(new { code = "TEAM_HAS_ACTIVE_MEMBERS", message = "Mută membrii activi înainte de dezactivarea echipei." });
+        }
+
         team.IsActive = false;
         await _db.SaveChangesAsync();
 
@@ -160,6 +176,10 @@ public class TeamsController : ControllerBase
         });
     }
 
+    private Task<bool> IsCurrentAdminAsync() =>
+        int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
+            ? _db.Users.AnyAsync(user => user.Id == userId && user.IsActive && user.Role == UserRole.Admin)
+            : Task.FromResult(false);
 }
 
 public class CreateTeamRequest
