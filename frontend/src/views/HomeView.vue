@@ -9,6 +9,8 @@ import { VTextField } from 'vuetify/components/VTextField'
 import RemoteRequestForm from '../components/RemoteRequestForm.vue'
 import LeaveRequestForm from '../components/LeaveRequestForm.vue'
 import CalendarGrid from '../components/CalendarGrid.vue'
+import WeekGrid from '../components/WeekGrid.vue'
+import ApprovedDaysExport from '../components/ApprovedDaysExport.vue'
 import { types, statuses, type CalendarEvent } from '../utils/calendarDisplay'
 import { useAuthStore } from '../stores/auth'
 import PendingRequests from '../components/PendingRequests.vue'
@@ -74,7 +76,20 @@ interface CalendarMonth {
   holidays?: { date: string; name: string }[]
 }
 
+interface CalendarWeek {
+  from: string
+  to: string
+  teamId: number | null
+  members: { id: number; firstName: string; lastName: string }[]
+  events: CalendarEvent[]
+  holidays: { date: string; name: string }[]
+}
+
 const calendar = ref<CalendarMonth | null>(null)
+// Cerința 6: calendarul poate fi văzut pe lună sau pe săptămână (luni–duminică).
+const calendarView = ref<'month' | 'week'>('month')
+const weekStart = ref<string | null>(null)
+const week = ref<CalendarWeek | null>(null)
 const membersOpen = ref(false)
 const memberSearch = ref('')
 const selectedMonth = ref<{ year: number; month: number } | null>(null)
@@ -114,6 +129,8 @@ const remoteSubmitting = ref(false)
 const remoteError = ref('')
 const remoteNotice = ref('')
 const requestFormOpen = computed(() => leaveFormOpen.value || remoteFormOpen.value)
+// Selecția zilelor remote se face în grila lunară, deci formularele afișează mereu luna.
+const showingWeek = computed(() => calendarView.value === 'week' && !requestFormOpen.value)
 const panelOpen = computed(() => ownRequestsOpen.value || ownBalanceOpen.value ||
   pendingRequestsOpen.value || allocationOpen.value || settingsOpen.value ||
   usersOpen.value || teamAdministrationOpen.value)
@@ -208,6 +225,62 @@ function calendarDate(year: number, monthIndex: number, day: number) {
   date.setUTCFullYear(year, monthIndex, day)
   return date
 }
+
+// Datele sunt calendaristice (AAAA-LL-ZZ), calculate în UTC ca să nu apară decalaje de fus orar.
+function isoDay(date: Date) {
+  return `${String(date.getUTCFullYear()).padStart(4, '0')}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
+}
+
+function parseDay(day: string) {
+  const [year, month, date] = day.split('-').map(Number)
+  return calendarDate(year!, month! - 1, date!)
+}
+
+function addDays(day: string, count: number) {
+  const date = parseDay(day)
+  date.setUTCDate(date.getUTCDate() + count)
+  return isoDay(date)
+}
+
+function mondayOf(day: string) {
+  const date = parseDay(day)
+  return addDays(day, -((date.getUTCDay() + 6) % 7))
+}
+
+function localToday() {
+  const now = new Date()
+  return isoDay(calendarDate(now.getFullYear(), now.getMonth(), now.getDate()))
+}
+
+const weekDays = computed(() => (week.value ? Array.from({ length: 7 }, (_, index) => addDays(week.value!.from, index)) : []))
+const weekLabel = computed(() => {
+  if (!weekStart.value) return ''
+  const format = new Intl.DateTimeFormat('ro-RO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+  return `${format.format(parseDay(weekStart.value))} – ${format.format(parseDay(addDays(weekStart.value, 6)))}`
+})
+
+function setCalendarView(view: 'month' | 'week') {
+  if (calendarView.value === view || loading.value) return
+  if (view === 'week') {
+    // Săptămâna curentă dacă se vede luna curentă, altfel prima săptămână a lunii afișate.
+    const today = localToday()
+    const selected = selectedMonth.value
+    const inSelectedMonth = !selected || today.startsWith(`${String(selected.year).padStart(4, '0')}-${String(selected.month).padStart(2, '0')}`)
+    weekStart.value = mondayOf(inSelectedMonth ? today : isoDay(calendarDate(selected!.year, selected!.month - 1, 1)))
+  } else if (weekStart.value) {
+    const thursday = parseDay(addDays(weekStart.value, 3))
+    selectedMonth.value = { year: thursday.getUTCFullYear(), month: thursday.getUTCMonth() + 1 }
+  }
+  calendarView.value = view
+}
+
+function changeWeek(direction: -1 | 1) {
+  if (!weekStart.value || loading.value) return
+  weekStart.value = addDays(weekStart.value, 7 * direction)
+  void loadCalendar(direction)
+}
+
+watch(showingWeek, () => void loadCalendar())
 
 const weeks = computed(() => {
   if (!calendar.value) return []
@@ -462,11 +535,47 @@ async function cancelOwnRequest(request: OwnLeaveRequest | OwnRemoteRequest) {
   }
 }
 
+async function loadWeek(loadId: number) {
+  try {
+    const params = new URLSearchParams()
+    if (weekStart.value) {
+      params.set('from', weekStart.value)
+      params.set('to', addDays(weekStart.value, 6))
+    }
+    if (isAdmin.value && selectedTeam.value) params.set('teamId', String(selectedTeam.value))
+    if (selectedType.value) params.set('type', selectedType.value)
+    const response = await fetch(`/api/calendar/range?${params}`, {
+      headers: { Authorization: `Bearer ${auth.getToken() ?? ''}` },
+    })
+    if (loadId !== calendarLoadId) return
+    if (response.status === 401) {
+      await signOut()
+      return
+    }
+    const result = await response.json().catch(() => null)
+    if (loadId !== calendarLoadId) return
+    if (!response.ok) {
+      errorMessage.value = result?.message || 'Calendarul săptămânal nu a putut fi încărcat.'
+      return
+    }
+    week.value = result as CalendarWeek
+    weekStart.value = week.value.from
+  } catch {
+    if (loadId === calendarLoadId) errorMessage.value = 'Calendarul săptămânal nu a putut fi încărcat. Încearcă din nou.'
+  } finally {
+    if (loadId === calendarLoadId) loading.value = false
+  }
+}
+
 async function loadCalendar(direction: -1 | 0 | 1 = 0) {
   const loadId = ++calendarLoadId
   monthTurn.value = 0
   loading.value = true
   errorMessage.value = ''
+  if (showingWeek.value) {
+    await loadWeek(loadId)
+    return
+  }
 
   try {
     const selected = selectedMonth.value
@@ -667,6 +776,7 @@ onMounted(() => {
                 @click="loadOwnRequests"
               >Reîncarcă cererile</VBtn>
             </div>
+            <ApprovedDaysExport @unauthorized="signOut" />
             <VAlert v-if="ownRequestsError" class="mb-3" color="error" variant="tonal" role="alert">
               {{ ownRequestsError }}
             </VAlert>
@@ -719,18 +829,38 @@ onMounted(() => {
 
           <section v-if="!workspaceFocused || requestFormOpen" class="calendar-area" aria-label="Calendarul echipei">
             <div v-if="selectedMonth" class="month-navigation mt-5">
-              <h2>{{ monthLabel }}</h2>
+              <h2>{{ showingWeek ? weekLabel : monthLabel }}</h2>
               <div class="month-actions">
-                <VBtn
-                  variant="outlined"
-                  :disabled="loading || cancelingRequest !== null || remoteSubmitting || (selectedMonth.year === 1 && selectedMonth.month === 1)"
-                  @click="changeMonth(-1)"
-                >Luna anterioară</VBtn>
-                <VBtn
-                  variant="outlined"
-                  :disabled="loading || cancelingRequest !== null || remoteSubmitting || (selectedMonth.year === 9999 && selectedMonth.month === 12)"
-                  @click="changeMonth(1)"
-                >Luna următoare</VBtn>
+                <div v-if="!requestFormOpen" class="view-switch" role="group" aria-label="Mod de afișare a calendarului">
+                  <VBtn
+                    :variant="calendarView === 'month' ? 'flat' : 'outlined'"
+                    :aria-pressed="calendarView === 'month'"
+                    :disabled="loading"
+                    @click="setCalendarView('month')"
+                  >Lună</VBtn>
+                  <VBtn
+                    :variant="calendarView === 'week' ? 'flat' : 'outlined'"
+                    :aria-pressed="calendarView === 'week'"
+                    :disabled="loading"
+                    @click="setCalendarView('week')"
+                  >Săptămână</VBtn>
+                </div>
+                <template v-if="showingWeek">
+                  <VBtn variant="outlined" :disabled="loading || cancelingRequest !== null" @click="changeWeek(-1)">Săptămâna anterioară</VBtn>
+                  <VBtn variant="outlined" :disabled="loading || cancelingRequest !== null" @click="changeWeek(1)">Săptămâna următoare</VBtn>
+                </template>
+                <template v-else>
+                  <VBtn
+                    variant="outlined"
+                    :disabled="loading || cancelingRequest !== null || remoteSubmitting || (selectedMonth.year === 1 && selectedMonth.month === 1)"
+                    @click="changeMonth(-1)"
+                  >Luna anterioară</VBtn>
+                  <VBtn
+                    variant="outlined"
+                    :disabled="loading || cancelingRequest !== null || remoteSubmitting || (selectedMonth.year === 9999 && selectedMonth.month === 12)"
+                    @click="changeMonth(1)"
+                  >Luna următoare</VBtn>
+                </template>
               </div>
             </div>
 
@@ -790,7 +920,11 @@ onMounted(() => {
               <VBtn variant="text" @click="loadCalendar()">Încearcă din nou</VBtn>
             </VAlert>
 
-            <div v-else-if="calendar" class="mt-5">
+            <div v-else-if="showingWeek && week" class="mt-5">
+              <WeekGrid :days="weekDays" :members="week.members" :events="week.events" :holidays="week.holidays" />
+            </div>
+
+            <div v-else-if="!showingWeek && calendar" class="mt-5">
               <div
                 v-if="!requestFormOpen"
                 class="calendar-members"
@@ -879,6 +1013,9 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 0.75rem;
 }
+
+.view-switch { display: flex; gap: 0.35rem; margin-right: 0.5rem; }
+.view-switch [aria-pressed="true"] { background: var(--ritm-accent); color: #fff; }
 
 .home-header, .month-navigation, .session-actions {
   align-items: center;

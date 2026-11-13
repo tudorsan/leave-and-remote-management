@@ -42,6 +42,7 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<ExportService>();
 
 // Notificări (cerința 16): emailurile sunt simulate în log. Pentru emailuri reale se înlocuiește doar această linie.
 builder.Services.AddSingleton<IEmailSender, LogEmailSender>();

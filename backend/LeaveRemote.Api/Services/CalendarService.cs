@@ -7,13 +7,17 @@ using Microsoft.EntityFrameworkCore;
 namespace LeaveRemote.Api.Services;
 
 /// <summary>
-/// Calendarul lunar: membrii echipei și, pentru fiecare zi, cine e în concediu sau remote
+/// Calendarul echipei: membrii și, pentru fiecare zi, cine e în concediu sau remote
 /// (doar cererile în așteptare și aprobate). Angajatul și Managerul văd doar echipa lor;
 /// Adminul vede toate echipele și poate filtra pe echipă.
+/// Vederea lunară (cerința 4) și cea săptămânală (cerința 6) folosesc aceeași logică, pe intervale diferite.
 /// </summary>
 public sealed class CalendarService(AppDbContext db, AppClock clock)
 {
     public const string RemoteType = "Remote";
+
+    /// <summary>Cel mai lung interval acceptat de vederea pe interval (o săptămână are 7 zile).</summary>
+    public const int MaxRangeDays = 42;
 
     public async Task<Result<CalendarMonthView>> GetMonthAsync(User viewer, int? year, int? month, int? teamId, string? type)
     {
@@ -25,6 +29,41 @@ public sealed class CalendarService(AppDbContext db, AppClock clock)
             return ServiceError.BadRequest("INVALID_CALENDAR_MONTH", "Anul sau luna este invalidă.");
         }
 
+        var start = new DateOnly(selectedYear, selectedMonth, 1);
+        var end = start.AddDays(DateTime.DaysInMonth(selectedYear, selectedMonth) - 1);
+        var data = await LoadAsync(viewer, start, end, teamId, type);
+        if (data.Error is not null) return data.Error;
+
+        var (resolvedTeamId, members, holidays, events) = data.Value!;
+        return new CalendarMonthView(selectedYear, selectedMonth, resolvedTeamId, members, holidays, events);
+    }
+
+    /// <summary>
+    /// Calendarul pe un interval oarecare de zile (ex. o săptămână care trece dintr-o lună în alta).
+    /// Fără interval: săptămâna curentă, de luni până duminică.
+    /// </summary>
+    public async Task<Result<CalendarRangeView>> GetRangeAsync(User viewer, DateOnly? from, DateOnly? to, int? teamId, string? type)
+    {
+        var start = from ?? WorkingDays.MondayOf(clock.Today);
+        var end = to ?? start.AddDays(6);
+        if (start == default || end == default || end < start || end.DayNumber - start.DayNumber + 1 > MaxRangeDays)
+        {
+            return ServiceError.BadRequest("INVALID_CALENDAR_RANGE",
+                $"Intervalul calendarului este invalid: sfârșitul trebuie să fie după început, iar intervalul de maximum {MaxRangeDays} de zile.");
+        }
+
+        var data = await LoadAsync(viewer, start, end, teamId, type);
+        if (data.Error is not null) return data.Error;
+
+        var (resolvedTeamId, members, holidays, events) = data.Value!;
+        return new CalendarRangeView(start, end, resolvedTeamId, members, holidays, events);
+    }
+
+    private sealed record CalendarData(
+        int? TeamId, List<CalendarMemberView> Members, List<HolidayView> Holidays, List<CalendarEventView> Events);
+
+    private async Task<Result<CalendarData>> LoadAsync(User viewer, DateOnly start, DateOnly end, int? teamId, string? type)
+    {
         var remoteOnly = string.Equals(type?.Trim(), RemoteType, StringComparison.OrdinalIgnoreCase);
         LeaveType? leaveType = null;
         if (!string.IsNullOrWhiteSpace(type) && !remoteOnly)
@@ -36,6 +75,7 @@ public sealed class CalendarService(AppDbContext db, AppClock clock)
             leaveType = parsed;
         }
 
+        // Matricea de permisiuni: doar Adminul vede (și filtrează) alte echipe.
         if (viewer.Role != UserRole.Admin)
         {
             if (!viewer.TeamId.HasValue || (teamId.HasValue && teamId != viewer.TeamId)) return ServiceError.Forbidden();
@@ -45,9 +85,6 @@ public sealed class CalendarService(AppDbContext db, AppClock clock)
         {
             return ServiceError.NotFound("TEAM_NOT_FOUND", "Echipa nu există.");
         }
-
-        var start = new DateOnly(selectedYear, selectedMonth, 1);
-        var end = start.AddDays(DateTime.DaysInMonth(selectedYear, selectedMonth) - 1);
 
         var membersQuery = db.Users.AsNoTracking().Where(u => u.IsActive);
         if (teamId.HasValue) membersQuery = membersQuery.Where(u => u.TeamId == teamId.Value);
@@ -92,7 +129,7 @@ public sealed class CalendarService(AppDbContext db, AppClock clock)
             .Select(h => new HolidayView(h.Date, h.Name))
             .ToListAsync();
 
-        return new CalendarMonthView(selectedYear, selectedMonth, teamId, members, holidays,
+        return new CalendarData(teamId, members, holidays,
             events.OrderBy(e => e.Date).ThenBy(e => e.UserId).ThenBy(e => e.RequestId).ToList());
     }
 }

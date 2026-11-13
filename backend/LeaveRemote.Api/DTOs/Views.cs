@@ -35,6 +35,9 @@ public sealed record HolidayView(DateOnly Date, string Name);
 public sealed record CalendarMonthView(
     int Year, int Month, int? TeamId, List<CalendarMemberView> Members, List<HolidayView> Holidays, List<CalendarEventView> Events);
 
+public sealed record CalendarRangeView(
+    DateOnly From, DateOnly To, int? TeamId, List<CalendarMemberView> Members, List<HolidayView> Holidays, List<CalendarEventView> Events);
+
 public sealed record SettingsView(Dictionary<string, string> Settings, List<HolidayView> Holidays);
 
 public sealed record UserView(

@@ -388,4 +388,35 @@ describe('calendar on Home', () => {
     expect(wrapper.findAll('.legend li')).toHaveLength(5)
     wrapper.unmount()
   })
+
+  it('switches to the weekly view with members on rows and the selected week on columns', async () => {
+    const month = { year: 2026, month: 11, teamId: 1, members: [], events: [], holidays: [] }
+    const week = {
+      from: '2026-11-30', to: '2026-12-06', teamId: 1,
+      members: [{ id: 1, firstName: 'Ana', lastName: 'Test' }, { id: 2, firstName: 'Mihai', lastName: 'Test' }],
+      holidays: [{ date: '2026-11-30', name: 'Sfântul Andrei' }],
+      events: [{ requestId: 9, userId: 2, date: '2026-12-02', type: 'Vacation', status: 'Approved' }],
+    }
+    const fetchApi = vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => (url.startsWith('/api/calendar/range') ? week : month),
+    }))
+    vi.stubGlobal('fetch', fetchApi)
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text() === 'Săptămână')!.trigger('click')
+    await flushPromises()
+
+    expect(fetchApi.mock.calls.some(([url]) => url.startsWith('/api/calendar/range?from='))).toBe(true)
+    expect(wrapper.find('.week').exists()).toBe(true)
+    const rows = wrapper.findAll('.week tbody tr')
+    expect(rows.map(row => row.get('th').text())).toEqual(['Ana Test', 'Mihai Test'])
+    const mihaiCells = rows[1]!.findAll('td')
+    expect(mihaiCells[2]!.text()).toContain('Concediu de odihnă')
+    expect(mihaiCells[2]!.get('.week-event').classes()).toContain('bg-blue-darken-3')
+    expect(wrapper.get('.week thead').text()).toContain('Sfântul Andrei')
+    expect(wrapper.findAll('button').some(button => button.text() === 'Săptămâna următoare')).toBe(true)
+    wrapper.unmount()
+  })
 })
