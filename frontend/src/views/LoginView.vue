@@ -43,6 +43,7 @@ interface LoginResponse {
 
 async function login() {
   if (submitting.value || !selectedRole.value) return
+  const role = selectedRole.value.id
 
   submitting.value = true
   errorMessage.value = ''
@@ -60,10 +61,13 @@ async function login() {
       return
     }
 
-    // Cardul ales e doar un punct de plecare: rolul real vine din cont (verificat de server),
-    // deci un card greșit nu blochează autentificarea.
-    const session = await auth.startSession(result.token)
-    if (session !== true) {
+    // Cardul ales trebuie să corespundă rolului contului; altfel utilizatorul își alege din nou rolul.
+    const session = await auth.startSession(result.token, role)
+    if (session === 'role-mismatch') {
+      errorMessage.value = 'Contul are alt rol. Apasă „Schimbă rolul” și alege rolul contului tău.'
+      return
+    }
+    if (!session) {
       errorMessage.value = 'Sesiunea nu a putut fi verificată. Încearcă din nou.'
       return
     }

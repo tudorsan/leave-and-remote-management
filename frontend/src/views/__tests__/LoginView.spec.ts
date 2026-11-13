@@ -40,19 +40,33 @@ describe('pagina de autentificare', () => {
     expect(mount(LoginView).text()).not.toContain('Sesiunea ta a expirat')
   })
 
-  it('autentifică utilizatorul cu rolul real al contului chiar dacă a ales alt card', async () => {
+  async function loginWithCard(card: string) {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ token: 'jwt' }) }))
-    auth.startSession.mockResolvedValue(true)
     const wrapper = mount(LoginView)
-
-    await wrapper.findAll('button.role-option').find(button => button.text().includes('Manager'))!.trigger('click')
+    await wrapper.findAll('button.role-option').find(button => button.text().includes(card))!.trigger('click')
     await wrapper.get('#login-email').setValue('employee@example.com')
     await wrapper.get('#login-password').setValue('Employee123!')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
+    return wrapper
+  }
 
-    expect(auth.startSession).toHaveBeenCalledWith('jwt')
+  it('cere alegerea rolului corect când cardul nu corespunde contului', async () => {
+    auth.startSession.mockResolvedValue('role-mismatch')
+
+    const wrapper = await loginWithCard('Manager')
+
+    expect(auth.startSession).toHaveBeenCalledWith('jwt', 'Manager')
+    expect(wrapper.text()).toContain('Contul are alt rol')
+    expect(navigation.replace).not.toHaveBeenCalled()
+  })
+
+  it('intră în aplicație când cardul corespunde rolului contului', async () => {
+    auth.startSession.mockResolvedValue(true)
+
+    await loginWithCard('Angajat')
+
+    expect(auth.startSession).toHaveBeenCalledWith('jwt', 'Employee')
     expect(navigation.replace).toHaveBeenCalledWith({ name: 'home' })
-    expect(wrapper.text()).not.toContain('Contul are alt rol')
   })
 })
