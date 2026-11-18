@@ -426,3 +426,6 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# Specificația primită de la firmă (păstrată doar local)
+Specificatii_calendar_concedii_remote.pdf
