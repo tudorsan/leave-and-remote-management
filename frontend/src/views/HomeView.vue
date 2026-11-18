@@ -696,7 +696,7 @@ onMounted(() => {
 
       <div class="workspace-main">
         <header class="home-header">
-          <h1>{{ workspaceFocused ? 'Spațiu de lucru' : 'Calendar lunar' }}</h1>
+          <h1>{{ workspaceFocused ? 'Spațiu de lucru' : showingWeek ? 'Calendar săptămânal' : 'Calendar lunar' }}</h1>
           <div class="session-actions">
             <div v-if="!workspaceFocused" class="new-request" @pointerleave="closeNewRequestMenu" @keydown.esc="newRequestMenuOpen = false">
               <VBtn class="new-request-trigger" type="button" aria-controls="new-request-menu" :aria-expanded="newRequestMenuOpen" @click="newRequestMenuOpen = !newRequestMenuOpen">
