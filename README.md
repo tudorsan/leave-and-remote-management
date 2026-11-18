@@ -85,9 +85,59 @@ Am pus mai jos un traseu prin aplicație care atinge toate cerințele din specif
 - Din „Setări globale” modifică toate setările din specificație și lista de sărbători. De exemplu, dacă pornești aprobarea pentru remote, următoarea zi remote rămâne în așteptare. Cererile deja făcute nu se revalidează.
 - Vede calendarul tuturor echipelor și poate filtra pe echipă.
 
-**Resetarea parolei** (3): pe pagina de login, „Ai uitat parola?”, apoi linkul din emailul din log. După schimbarea parolei, sesiunile vechi ale contului nu mai sunt valabile.
+**Resetarea parolei** (3), **vederea săptămânală și exportul** (6) și **notificările pe email** (16) au mai jos o secțiune separată, cu pași mai detaliați.
 
 **Permisiunile** sunt verificate în backend, nu doar ascunse în interfață. Cu tokenul unui angajat, de exemplu, `GET /api/settings` sau aprobarea unei cereri întorc 403. Rolul și starea contului sunt recitite din baza de date la fiecare request, deci schimbarea rolului sau dezactivarea au efect imediat, chiar dacă omul era deja logat.
+
+## Cerințele opționale
+
+Le-am făcut pe toate trei. Mai jos e cum le poți verifica pe fiecare.
+
+Emailurile sunt simulate, deci nu ajung într-o căsuță, ci apar în log-ul backend-ului, fiecare cu „EMAIL SIMULAT”, destinatarul, subiectul și textul. În varianta Docker le vezi cu `docker compose logs -f api`, iar în varianta fără Docker, direct în terminalul în care rulează backend-ul. Pentru toată secțiunea asta merită să ai log-ul deschis lângă browser.
+
+### Notificări pe email la schimbarea stării (16)
+
+Fiecare schimbare a unei cereri trimite un email:
+
+| Ce se întâmplă | Cine primește emailul |
+|---|---|
+| un angajat cere concediu | managerii echipei lui (pentru un manager, șeful lui direct) |
+| cererea e aprobată | cel care a cerut-o |
+| cererea e respinsă | cel care a cerut-o, cu motivul respingerii |
+| cel care a cerut-o o anulează | cei care trebuiau să o aprobe |
+| zile remote aprobate automat | cel care le-a cerut (un singur email pentru toate zilele din formular) |
+| zile remote care așteaptă aprobare | managerul |
+| o cerere rămâne nedecisă după ultima ei zi și e anulată automat | cel care a cerut-o |
+
+Un test rapid: ca Andrei, cere un concediu; în log apare emailul către Maria. Ca Maria, respinge-l cu un motiv; apare emailul către Andrei, cu motivul. Dacă încerci o respingere cu motiv prea scurt, aplicația o refuză și în log nu apare nimic, pentru că emailurile pleacă doar după ce operația s-a salvat.
+
+### Vederea săptămânală și exportul zilelor aprobate (6)
+
+**Vederea săptămânală.** Deasupra calendarului sunt butoanele **Lună** și **Săptămână**. Pe săptămână, membrii echipei sunt pe rânduri, iar zilele de luni până duminică pe coloane. Culorile sunt aceleași ca la lună (deschis = în așteptare, plin = aprobat), iar weekendul și sărbătorile sunt marcate. Cu „Săptămâna anterioară” și „Săptămâna următoare” te muți prin calendar, iar filtrul pe tipul absenței (și, pentru admin, pe echipă) merge la fel. Cel mai bine se vede ca Maria, care are toată echipa pe rânduri. Când deschizi un formular de cerere, calendarul trece singur pe lună, pentru că zilele remote se aleg din grila lunară.
+
+**Exportul.** În „Cererile mele” sunt două butoane:
+
+- **Calendar (.ics)**: un fișier cu zilele tale aprobate, câte un eveniment pe toată ziua. Pe Windows se deschide direct în Outlook. În Google Calendar îl imporți din Setări → Import și export. Ca să nu amesteci testul cu calendarul tău, poți crea întâi un calendar separat și să-l imporți acolo.
+- **Excel (.csv)**: același conținut, ca tabel cu tipul, data de început, data de sfârșit, zilele lucrătoare și comentariul. Dacă datele apar ca `#####`, coloana e doar prea îngustă: un dublu-click pe marginea ei o lărgește.
+
+Exportul conține **doar zilele proprii aprobate**. Cererile în așteptare, cele respinse și cele ale colegilor nu apar. Ca să ai ce exporta, ai nevoie de ceva aprobat: zilele remote se aprobă automat, iar un concediu îl aprobă Maria.
+
+### Resetarea parolei prin link pe email (3)
+
+1. Pe pagina de login alege un rol și apasă **Ai uitat parola?**.
+2. Scrie `employee2@example.com` și trimite. Mesajul de pe ecran e același și pentru o adresă care nu există, ca să nu se poată afla ce conturi sunt (atunci nu apare niciun email în log).
+3. În log apare emailul „Resetarea parolei”, cu un link de forma `http://localhost:8080/reset-password?token=...` (sau pe portul 5173 în varianta fără Docker). Deschide-l în browser.
+4. Alege o parolă nouă de cel puțin 8 caractere, scrisă de două ori. În log apare și emailul de confirmare „Parola ta a fost schimbată”.
+5. Autentifică-te cu parola nouă. Cea veche nu mai merge.
+
+Câteva lucruri pe care le poți verifica tot aici:
+
+- **Linkul merge o singură dată.** Dacă îl deschizi din nou după ce ai schimbat parola, primești „Linkul de resetare este invalid, a fost deja folosit sau a expirat”.
+- **Un link nou îl anulează pe cel vechi.** Dacă ceri resetarea de două ori, doar ultimul link funcționează.
+- **Sesiunile vechi se închid.** Dacă ești logat ca Ioana într-un tab și schimbi parola din altul, la următoarea acțiune în primul tab ești trimis la login, cu mesajul că sesiunea nu mai e valabilă.
+- **Linkul expiră după 30 de minute.**
+
+După test, parola Ioanei rămâne cea nouă. În Docker o readuci la `Employee123!` cu încă o resetare sau pornind de la zero cu `docker compose down -v`.
 
 ## Cum am interpretat unele lucruri
 
